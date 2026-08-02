@@ -1,7 +1,5 @@
 package crypto
 
-import "unicode/utf8"
-
 var defaultHasher Hasher
 
 func init() {
@@ -28,7 +26,6 @@ func SetDefaultHasher(hasher Hasher) {
 func HashPassword(password string) (string, error) {
 	return defaultHasher.Hash(password)
 }
-
 
 func VerifyPassword(password, storedHash string) (bool, error) {
 	algo, err := DetectAlgorithm(storedHash)
