@@ -15,7 +15,9 @@ Toolkit interno de Go con utilidades listas para producción: logging, hashing d
 - [Módulo `security/crypto`](#-módulo-securitycrypto)
 - [Módulo `security/token`](#-módulo-securitytoken)
 - [Módulo `security/middleware`](#-módulo-securitymiddleware)
+- [Módulo `security/audit` (IA)](#-módulo-securityaudit---ia)
 - [Ejemplo completo de integración](#-ejemplo-completo-de-integración)
+- [Pruebas unitarias con casos reales](#-pruebas-unitarias-con-casos-reales)
 - [Manejo de errores](#-manejo-de-errores)
 - [Licencia](#-licencia)
 
@@ -840,28 +842,415 @@ func main() {
             userID := "user-123" // tras verificar crypto.VerifyPassword contra el hash guardado
 
             sessionID, _ := sessionManager.CreateSession(token.SessionInfo{
-                UserID: userID, IPAddress: c.ClientIP(),
+                UserID:   userID,
+                IPAddress: c.ClientIP(),
+                UserAgent: c.GetHeader("User-Agent"),
             })
-            accessToken, _ := jwtManager.GenerateAccessToken(token.Claims{
-                UserID: userID, Role: "user", SessionID: sessionID,
-            })
-            refreshToken, _ := jwtManager.GenerateRefreshToken(token.Claims{
-                UserID: userID, SessionID: sessionID,
-            })
-            c.JSON(http.StatusOK, gin.H{"access_token": accessToken, "refresh_token": refreshToken})
-        }},
-    }, middleware.WithGroupName("auth"))
 
-    adminGroup := r.Group("/admin")
-    middleware.RegisterGinRoutes(adminGroup, []middleware.Route[gin.HandlerFunc]{
-        {Method: "GET", Path: "/dashboard", Protected: true, Handler: func(c *gin.Context) {
-            c.JSON(http.StatusOK, gin.H{"claims": c.MustGet("user_claims")})
-        }},
-    }, middleware.WithAuthManager(jwtManager), middleware.WithGroupName("admin"))
+            accessToken, _ := jwtManager.GenerateAccessToken(userID, "user", map[string]interface{}{
+                "session_id": sessionID,
+            })
+            refreshToken, _ := jwtManager.GenerateRefreshToken(userID)
 
-    log.Info("🚀 Servidor escuchando en :8080")
+            c.JSON(http.StatusOK, gin.H{
+                "access_token":  accessToken,
+                "refresh_token": refreshToken,
+                "session_id":    sessionID,
+            })
+        }},
+    })
+
+    protectedGroup := r.Group("/")
+    protectedGroup.Use(middleware.GinAuth(jwtManager))
+    protectedGroup.GET("/profile", func(c *gin.Context) {
+        claims, _ := middleware.GetClaimsFromGinContext(c)
+        c.JSON(http.StatusOK, claims)
+    })
+
     _ = r.Run(":8080")
-    _ = time.Second // placeholder si agregas timeouts propios
+    _ = time.Second
+}
+```
+
+---
+
+## 🕵️ Módulo `security/audit` - IA
+
+Sistema de auditoría forense con detección de anomalías mediante IA. Registra cada acción del sistema, detecta patrones de ataque y permite análisis post-mortem completo.
+
+### Características Principales
+
+- **Recolección Completa**: IP, User-ID, User-Agent, Geolocalización, Sesión, Rol, Email, Método HTTP, Ruta, Headers, Payload, Timestamps
+- **Motor de IA Integrado**: Detecta scraping, fuerza bruta, viajes imposibles, SQLi/XSS, DDoS y comportamientos anómalos
+- **Almacenamiento Flexible**: Memoria (tests), SQLite (dev), PostgreSQL (producción) con particionamiento automático
+- **Seguridad Forense**: Cifrado en reposo, inmutabilidad de registros, cadena de custodia
+- **Exportación Múltiple**: JSON, CSV, NDJSON con compresión GZIP
+- **Retención Automática**: Políticas configurables por días o tamaño
+
+### Configuración Inicial
+
+```go
+import "github.com/AndresGT/GoKit/security/audit"
+
+func init() {
+    // PostgreSQL para producción
+    cfg := audit.NewPostgresConfig("postgres://user:pass@localhost/audit_db?sslmode=disable")
+    
+    // Habilitar motor de IA
+    cfg.EnableAI(true)
+    cfg.WithRetentionDays(90)
+    cfg.WithEncryptionKey("clave-maestra-32-bytes-para-cifrado!")
+    
+    audit.Init(cfg)
+}
+```
+
+### Registro Manual de Eventos
+
+```go
+// Auditoría de cambio de contraseña
+audit.Record(audit.Event{
+    ActorID:   "user_123",
+    Action:    "password_change",
+    Resource:  "credentials",
+    Status:    audit.StatusSuccess,
+    IPAddress: "192.168.1.50",
+    UserAgent: "Mozilla/5.0...",
+    Metadata: map[string]interface{}{
+        "old_hash_prefix": "$argon2...",
+        "new_hash_prefix": "$argon2...",
+        "mfa_enabled":     true,
+        "strength_score":  85,
+    },
+})
+```
+
+### Middleware de Auditoría Automática
+
+Captura automáticamente todas las peticiones HTTP con contexto completo:
+
+```go
+r := gin.New()
+
+// Auditoría automática en todas las rutas
+r.Use(middleware.Audit())
+
+// O con configuración personalizada
+r.Use(middleware.AuditWithConfig(audit.Config{
+    SkipPaths:       []string{"/health", "/metrics"},
+    CaptureBody:     true,
+    CaptureHeaders:  true,
+    EnableGeolocation: true,
+}))
+```
+
+**Datos capturados automáticamente:**
+- ✅ IP pública y privada
+- ✅ User-Agent completo
+- ✅ Geolocalización (país, ciudad, lat/lon)
+- ✅ Session ID y User ID (si están autenticados)
+- ✅ Rol y permisos
+- ✅ Método HTTP, ruta, query params
+- ✅ Headers completos (sanitizados)
+- ✅ Request/Response body (opcional)
+- ✅ Tiempo de ejecución
+- ✅ Código de estado HTTP
+- ✅ **Detección de IA en tiempo real**
+
+### Consultas Forenses
+
+```go
+// Buscar todos los intentos fallidos de un usuario
+events, err := audit.Query(audit.Filter{
+    ActorID: "user_123",
+    Status:  audit.StatusFailure,
+    Limit:   50,
+    OrderBy: "timestamp DESC",
+})
+
+// Filtrar por rango de fechas y tipo de amenaza
+threats, err := audit.GetThreats(audit.ThreatFilter{
+    StartDate:   time.Now().AddDate(0, -1, 0),
+    EndDate:     time.Now(),
+    ThreatType:  audit.ThreatBruteForce,
+    MinRiskScore: 70.0,
+})
+
+// Obtener timeline de actividad de un usuario
+timeline, err := audit.GetUserTimeline("user_123", time.Now().Add(-24*time.Hour))
+```
+
+### Detección de Amenazas con IA
+
+El motor de IA detecta automáticamente:
+
+| Tipo de Amenaza | Descripción | Acción Automática |
+|----------------|-------------|-------------------|
+| **Fuerza Bruta** | >5 intentos fallidos en 5 min | Bloqueo temporal + alerta |
+| **Viaje Imposible** | Logins en ubicaciones distantes < 1h | Re-autenticación forzada |
+| **SQL Injection** | Patrones SQLi en payloads | Bloqueo + registro forense |
+| **XSS Attempt** | Scripts en inputs | Sanitización + alerta |
+| **Scraping** | >100 req/min desde misma IP | Rate limiting agresivo |
+| **DDoS Pattern** | Picos anómalos de tráfico | Activar mitigación |
+| **Anomalía Comportamental** | Desviación >3σ del patrón normal | Revisión manual sugerida |
+
+```go
+// Verificar amenazas activas para un usuario
+threats, _ := audit.GetActiveThreats("user_123")
+for _, t := range threats {
+    logger.WithFields(
+        "threat_type", t.Type,
+        "risk_score", t.RiskScore,
+        "description", t.Description,
+    ).Warn("Amenaza detectada")
+    
+    if t.RiskScore > 90 {
+        // Bloqueo automático
+        audit.BlockActor(t.ActorID, 24*time.Hour, "Riesgo crítico")
+    }
+}
+```
+
+### Exportación y Reportes
+
+```go
+// Exportar logs a JSON (con compresión opcional)
+err := audit.ExportToJSON("backup_audit_2024.json.gz", audit.Filter{
+    StartDate: time.Now().AddDate(0, -1, 0),
+}, true) // true = comprimir con GZIP
+
+// Exportar a CSV para análisis en Excel/BI
+err = audit.ExportToCSV("reporte_mensual.csv", audit.Filter{
+    StartDate: time.Now().AddDate(0, -1, 0),
+    EndDate:   time.Now(),
+    Actions:   []string{"login", "password_change", "permission_change"},
+})
+
+// Exportar a NDJSON para ingestión en ELK/Splunk
+err = audit.ExportToNDJSON("logs_para_splunk.ndjson", audit.Filter{})
+```
+
+### Dashboard de Métricas
+
+```go
+// Obtener estadísticas de auditoría
+stats, err := audit.GetStats(audit.StatsFilter{
+    StartDate: time.Now().AddDate(0, -1, 0),
+})
+
+fmt.Printf("Eventos totales: %d\n", stats.TotalEvents)
+fmt.Printf("Amenazas detectadas: %d\n", stats.TotalThreats)
+fmt.Printf("Actores únicos: %d\n", stats.UniqueActors)
+fmt.Printf("Riesgo promedio: %.2f\n", stats.AverageRiskScore)
+
+// Top 10 usuarios con más eventos fallidos
+topFailed, err := audit.GetTopFailedActors(10, time.Now().Add(-24*time.Hour))
+```
+
+---
+
+## 🧪 Pruebas Unitarias con Casos Reales
+
+GoKit incluye una suite exhaustiva de pruebas. A continuación ejemplos reales para el módulo de auditoría:
+
+### Test: Detección de Fuerza Bruta
+
+```go
+package audit_test
+
+import (
+    "testing"
+    "github.com/AndresGT/GoKit/security/audit"
+    "github.com/stretchr/testify/assert"
+)
+
+func TestAuditoria_DeteccionFuerzaBruta(t *testing.T) {
+    // Configurar auditoría en memoria para tests
+    cfg := audit.NewMemoryConfig()
+    cfg.EnableAI(true)
+    audit.Init(cfg)
+
+    attackerIP := "10.0.0.5"
+    targetUser := "victima_01"
+
+    // Simular 10 intentos fallidos consecutivos
+    for i := 0; i < 10; i++ {
+        audit.Record(audit.Event{
+            ActorID:   targetUser,
+            Action:    "login_attempt",
+            Resource:  "/api/auth/login",
+            Status:    audit.StatusFailure,
+            IPAddress: attackerIP,
+            Metadata: map[string]interface{}{
+                "reason":        "invalid_password",
+                "attempt_count": i + 1,
+            },
+        })
+    }
+
+    // Verificar que la IA detectó el patrón
+    threats, err := audit.GetThreatsByActor(targetUser)
+    assert.NoError(t, err)
+    assert.Greater(t, len(threats), 0, "Debería detectar fuerza bruta")
+    
+    threat := threats[0]
+    assert.Equal(t, audit.ThreatBruteForce, threat.Type)
+    assert.Greater(t, threat.RiskScore, 80.0, "Riesgo debería ser alto")
+    assert.Contains(t, threat.Description, "brute force")
+}
+```
+
+### Test: Viaje Imposible (Impossible Travel)
+
+```go
+func TestAuditoria_ViajeImposible(t *testing.T) {
+    cfg := audit.NewMemoryConfig()
+    cfg.EnableAI(true)
+    audit.Init(cfg)
+
+    userID := "viajero_sospechoso"
+
+    // Login desde Bogotá, Colombia
+    audit.Record(audit.Event{
+        ActorID:   userID,
+        Action:    "login_success",
+        Status:    audit.StatusSuccess,
+        IPAddress: "181.49.0.1", // Rango Colombia
+        Metadata: map[string]interface{}{
+            "location":      "Bogotá, Colombia",
+            "latitude":      4.7110,
+            "longitude":     -74.0721,
+            "device_fingerprint": "chrome_windows_001",
+        },
+    })
+
+    // Login desde Moscú, Rusia 30 segundos después (imposible físicamente)
+    audit.Record(audit.Event{
+        ActorID:   userID,
+        Action:    "login_success",
+        Status:    audit.StatusSuccess,
+        IPAddress: "95.173.0.1", // Rango Rusia
+        Metadata: map[string]interface{}{
+            "location":      "Moscow, Russia",
+            "latitude":      55.7558,
+            "longitude":     37.6173,
+            "device_fingerprint": "firefox_linux_002",
+        },
+    })
+
+    // La IA debe detectar viaje imposible
+    threats, _ := audit.GetThreatsByActor(userID)
+    assert.Greater(t, len(threats), 0)
+    
+    threat := threats[0]
+    assert.Equal(t, audit.ThreatImpossibleTravel, threat.Type)
+    assert.Greater(t, threat.RiskScore, 90.0, "Riesgo crítico por viaje imposible")
+    assert.Contains(t, threat.Description, "Impossible Travel")
+}
+```
+
+### Test: Detección de SQL Injection
+
+```go
+func TestAuditoria_SQLInjection(t *testing.T) {
+    cfg := audit.NewMemoryConfig()
+    cfg.EnableAI(true)
+    audit.Init(cfg)
+
+    attackerIP := "203.0.113.50"
+    
+    // Intento de SQLi en parámetro
+    audit.Record(audit.Event{
+        ActorID:   "anon_001",
+        Action:    "http_request",
+        Resource:  "/api/users?id=1' OR '1'='1",
+        Status:    audit.StatusBlocked,
+        IPAddress: attackerIP,
+        Metadata: map[string]interface{}{
+            "method": "GET",
+            "payload": "id=1' OR '1'='1",
+            "attack_vector": "query_param",
+        },
+    })
+
+    // Verificar detección
+    threats, _ := audit.GetThreatsByIP(attackerIP)
+    assert.Greater(t, len(threats), 0)
+    assert.Equal(t, audit.ThreatSQLInjection, threats[0].Type)
+}
+```
+
+### Test: Exportación de Logs
+
+```go
+func TestAuditoria_ExportacionLogs(t *testing.T) {
+    cfg := audit.NewMemoryConfig()
+    audit.Init(cfg)
+
+    // Generar eventos de prueba
+    for i := 0; i < 100; i++ {
+        audit.Record(audit.Event{
+            ActorID:   fmt.Sprintf("user_%d", i%10),
+            Action:    "test_action",
+            Status:    audit.StatusSuccess,
+            IPAddress: fmt.Sprintf("192.168.1.%d", i%255),
+        })
+    }
+
+    // Exportar a JSON
+    outputPath := "/tmp/test_audit_export.json"
+    err := audit.ExportToJSON(outputPath, audit.Filter{}, false)
+    assert.NoError(t, err)
+    
+    // Verificar que el archivo existe y tiene contenido
+    info, err := os.Stat(outputPath)
+    assert.NoError(t, err)
+    assert.Greater(t, info.Size(), int64(1000), "Archivo debería tener contenido")
+    
+    // Limpieza
+    os.Remove(outputPath)
+}
+```
+
+### Test: Concurrencia y Thread-Safety
+
+```go
+func TestAuditoria_Concurrencia(t *testing.T) {
+    cfg := audit.NewMemoryConfig()
+    cfg.EnableAI(true)
+    audit.Init(cfg)
+
+    const goroutines = 50
+    const eventsPerGoroutine = 20
+    
+    done := make(chan bool)
+    
+    // Lanzar múltiples goroutines escribiendo simultáneamente
+    for g := 0; g < goroutines; g++ {
+        go func(id int) {
+            for i := 0; i < eventsPerGoroutine; i++ {
+                audit.Record(audit.Event{
+                    ActorID:   fmt.Sprintf("concurrent_user_%d", id),
+                    Action:    "concurrent_action",
+                    Status:    audit.StatusSuccess,
+                    IPAddress: fmt.Sprintf("10.0.%d.%d", id%255, i%255),
+                })
+            }
+            done <- true
+        }(g)
+    }
+    
+    // Esperar a que terminen todas
+    for i := 0; i < goroutines; i++ {
+        <-done
+    }
+    
+    // Verificar que todos los eventos se registraron
+    totalExpected := goroutines * eventsPerGoroutine
+    stats, err := audit.GetStats(audit.StatsFilter{})
+    assert.NoError(t, err)
+    assert.Equal(t, totalExpected, stats.TotalEvents, 
+        "Todos los eventos concurrentes deberían registrarse")
 }
 ```
 

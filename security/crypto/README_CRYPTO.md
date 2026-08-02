@@ -1,76 +1,338 @@
-[![Go Version](https://img.shields.io/badge/Go-1.26+-00ADD8?style=flat&logo=go)](https://golang.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+# 🔐 Módulo Crypto - GoKit
 
+Módulo criptográfico completo para hashing de contraseñas, cifrado simétrico y generación de datos aleatorios seguros. Diseñado con enfoque dual: **uso rápido** para prototipado y **configuración completa** para producción.
 
-# GoKit Crypto
+## 📋 Tabla de Contenidos
 
-Módulo de seguridad criptográfica para el ecosistema **GoKit**: hashing de contraseñas, cifrado simétrico y generación de datos aleatorios seguros, todo con parámetros seguros por defecto.
+- [Características](#-características)
+- [Inicio Rápido](#-inicio-rápido)
+  - [Hashing de Contraseñas](#hashing-de-contraseñas)
+  - [Cifrado de Datos](#cifrado-de-datos)
+  - [Generación Aleatoria](#generación-aleatoria)
+- [Uso Avanzado](#-uso-avanzado)
+  - [Configuración de Hashers](#configuración-de-hashers)
+  - [Configuración de Cifrado](#configuración-de-cifrado)
+- [API Reference](#-api-reference)
+- [Ejemplos Completos](#-ejemplos-completos)
+- [Seguridad y Mejores Prácticas](#-seguridad-y-mejores-prácticas)
 
-## 🌟 Características
+---
 
-**Hashing de contraseñas**
-- **4 algoritmos soportados**: Argon2id, Bcrypt, Scrypt y PBKDF2-SHA256
-- **Interfaz común (`Hasher`)**: cambia de algoritmo sin tocar el resto del código (principio Open/Closed)
-- **Parámetros seguros por defecto**, alineados con recomendaciones de OWASP / NIST / RFC 9106
-- **Detección automática de algoritmo** a partir del propio hash (`DetectAlgorithm`)
-- **Migración progresiva** de parámetros con `NeedsUpgrade` (rehash on login)
-- **Comparación en tiempo constante** en todos los algoritmos, para prevenir ataques de timing
-- **Manejo correcto del límite de 72 bytes de bcrypt** mediante pre-hash con SHA-256 (sin truncar contraseñas)
+## ✨ Características
 
-**Cifrado simétrico**
-- **AES-256-GCM** (`Encrypter` / `AESEncrypter`): confidencialidad + autenticación (AEAD) en un solo paso
-- Nonce aleatorio único por cada operación de cifrado
-- Ayudantes para generar y codificar claves (`GenerateEncryptionKey`, `GenerateEncryptionKeyBase64`)
+### Hashing de Contraseñas
+- ✅ **4 algoritmos**: Argon2id (recomendado), Bcrypt, Scrypt, PBKDF2-SHA256
+- ✅ **Formato PHC estándar**: `$algoritmo$parametros$salt$hash`
+- ✅ **Detección automática**: Identifica el algoritmo de hashes existentes
+- ✅ **NeedsUpgrade**: Detecta cuando un hash debe regenerarse con parámetros más seguros
+- ✅ **Comparación en tiempo constante**: Previene ataques de timing
 
-**Datos aleatorios seguros**
-- `RandomBytes`, `RandomString`, `RandomHex` para tokens, session IDs y nonces
-- `GenerateUUID` (UUID v4, RFC 4122)
-- `GenerateAPIKey` con prefijo configurable
-- `GenerateNumericCode` para OTPs/2FA
-- Todo basado en `crypto/rand`, nunca en `math/rand`
+### Cifrado Simétrico
+- ✅ **AES-256-GCM**: Estándar militar/gubernamental
+- ✅ **Autenticación integrada**: Detecta manipulación de datos
+- ✅ **Nonce aleatorio**: Cada cifrado usa un nonce único
+- ✅ **Sin padding oracle**: GCM no requiere padding
 
-## 📦 Instalación
+### Generación Aleatoria
+- ✅ **Criptográficamente seguro**: Usa `crypto/rand` del sistema
+- ✅ **Múltiples formatos**: Bytes, strings, hex, UUIDs, API keys, OTPs
+- ✅ **URL-safe**: Caracteres compatibles con URLs y headers HTTP
 
-```bash
-go get github.com/AndresGT/GoKit/security/crypto
-```
+---
 
-## 🚀 Inicio rápido — Hashing de contraseñas
+## 🚀 Inicio Rápido
+
+### Hashing de Contraseñas
 
 ```go
 package main
 
 import (
     "fmt"
-    "github.com/AndresGT/GoKit/security/crypto"
+    "github.com/tu-usuario/gokit/security/crypto"
 )
 
 func main() {
-    hasher, err := crypto.NewHasher(crypto.HasherConfig{
-        Algorithm: crypto.AlgorithmArgon2id,
-    })
-    if err != nil {
-        panic(err)
-    }
-
-    hash, err := hasher.Hash("miContraseñaSegura123")
+    // Forma más rápida - usa Argon2id por defecto
+    hash, err := crypto.HashPassword("mi-contraseña-segura")
     if err != nil {
         panic(err)
     }
     fmt.Println("Hash:", hash)
-
-    ok, err := hasher.Verify("miContraseñaSegura123", hash)
+    
+    // Verificar contraseña
+    valid, err := crypto.VerifyPassword("mi-contraseña-segura", hash)
     if err != nil {
         panic(err)
     }
-    fmt.Println("¿Coincide?:", ok)
+    fmt.Println("Válida:", valid) // true
+    
+    // Verificar si necesita actualización
+    if crypto.NeedsUpgrade(hash) {
+        nuevoHash, _ := crypto.HashPassword("mi-contraseña-segura")
+        // Guardar nuevoHash en la base de datos
+    }
 }
 ```
 
-## 🔑 La interfaz `Hasher`
+### Cifrado de Datos
 
-Todos los algoritmos implementan el mismo contrato:
+```go
+package main
 
+import (
+    "fmt"
+    "github.com/tu-usuario/gokit/security/crypto"
+)
+
+func main() {
+    // ⚠️ IMPORTANTE: Configurar clave segura en producción
+    key, err := crypto.GenerateEncryptionKey()
+    if err != nil {
+        panic(err)
+    }
+    crypto.SetEncryptionKey(key)
+    
+    // Cifrar datos
+    encrypted, err := crypto.EncryptString("dato-secreto-a-guardar")
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println("Cifrado:", encrypted)
+    
+    // Descifrar datos
+    decrypted, err := crypto.DecryptString(encrypted)
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println("Descifrado:", decrypted) // "dato-secreto-a-guardar"
+}
+```
+
+### Generación Aleatoria
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/tu-usuario/gokit/security/crypto"
+)
+
+func main() {
+    // Session ID (32 caracteres URL-safe)
+    sessionID, _ := crypto.GenerateRandomString(32)
+    fmt.Println("Session ID:", sessionID)
+    
+    // Token hexadecimal (64 caracteres)
+    token, _ := crypto.GenerateSecureToken()
+    fmt.Println("Token:", token)
+    
+    // UUID v4
+    uuid, _ := crypto.GenerateUUIDv4()
+    fmt.Println("UUID:", uuid)
+    
+    // API Key con prefijo
+    apiKey, _ := crypto.GenerateAPIKeyWithPrefix("usr")
+    fmt.Println("API Key:", apiKey) // usr_a1b2c3d4e5f6...
+    
+    // Código OTP de 6 dígitos
+    otp, _ := crypto.GenerateOTP(6)
+    fmt.Println("OTP:", otp) // 482913
+}
+```
+
+---
+
+## 🔧 Uso Avanzado
+
+### Configuración de Hashers
+
+#### Argon2id (Recomendado por OWASP)
+
+```go
+import "github.com/tu-usuario/gokit/security/crypto"
+
+// Configuración personalizada
+hasher, err := crypto.NewHasher(crypto.HasherConfig{
+    Algorithm:         crypto.AlgorithmArgon2id,
+    Argon2Memory:      128 * 1024, // 128 MB
+    Argon2Iterations:  4,
+    Argon2Parallelism: 4,
+    Argon2KeyLength:   32,
+    Argon2SaltLength:  16,
+})
+if err != nil {
+    panic(err)
+}
+
+// Usar hasher
+hash, err := hasher.Hash("mi-contraseña")
+valid, err := hasher.Verify("mi-contraseña", hash)
+needsUpgrade := hasher.NeedsUpgrade(hash)
+```
+
+**Parámetros recomendados (RFC 9106):**
+| Parámetro | Mínimo | Producción | Alta Seguridad |
+|-----------|--------|------------|----------------|
+| Memoria | 64 MB | 128 MB | 256 MB |
+| Iteraciones | 3 | 4 | 5+ |
+| Paralelismo | 1 | 4 | 8 |
+
+#### Bcrypt (Compatibilidad Legacy)
+
+```go
+hasher, err := crypto.NewHasher(crypto.HasherConfig{
+    Algorithm:    crypto.AlgorithmBcrypt,
+    BcryptCost:   12, // 10=dev, 12=prod, 14=high-security
+})
+```
+
+#### Scrypt
+
+```go
+hasher, err := crypto.NewHasher(crypto.HasherConfig{
+    Algorithm:     crypto.AlgorithmScrypt,
+    ScryptN:       16384,  // 2^14
+    ScryptR:       8,
+    ScryptP:       1,
+    ScryptKeyLen:  32,
+    ScryptSaltLen: 16,
+})
+```
+
+#### PBKDF2-SHA256 (Estándar NIST)
+
+```go
+hasher, err := crypto.NewHasher(crypto.HasherConfig{
+    Algorithm:        crypto.AlgorithmPBKDF2,
+    PBKDF2Iterations: 600000, // Recomendación OWASP 2023
+    PBKDF2KeyLen:     32,
+    PBKDF2SaltLen:    16,
+})
+```
+
+### Funciones Directas por Algoritmo
+
+```go
+// Sin configuración - usan defaults óptimos
+hash1, _ := crypto.HashWithArgon2id("password")
+hash2, _ := crypto.HashWithBcrypt("password")
+hash3, _ := crypto.HashWithScrypt("password")
+hash4, _ := crypto.HashWithPBKDF2("password")
+```
+
+### Configuración de Cifrado
+
+#### Con Instancia Personalizada
+
+```go
+// Generar o cargar clave (32 bytes exactos)
+key, err := crypto.GenerateEncryptionKey()
+if err != nil {
+    panic(err)
+}
+
+// Crear cifrador
+encrypter, err := crypto.NewAESEncrypter(key)
+if err != nil {
+    panic(err)
+}
+
+// Cifrar/descifrar
+encrypted, _ := encrypter.EncryptString("secreto")
+decrypted, _ := encrypter.DecryptString(encrypted)
+
+// También con bytes
+encryptedBytes, _ := encrypter.Encrypt([]byte{0x01, 0x02, 0x03})
+decryptedBytes, _ := encrypter.Decrypt(encryptedBytes)
+```
+
+#### Desde Variable de Entorno (Producción)
+
+```go
+import (
+    "encoding/base64"
+    "os"
+    "github.com/tu-usuario/gokit/security/crypto"
+)
+
+// En tu inicialización
+keyBase64 := os.Getenv("ENCRYPTION_KEY")
+keyBytes, err := base64.StdEncoding.DecodeString(keyBase64)
+if err != nil {
+    panic("clave inválida")
+}
+
+err = crypto.SetEncryptionKey(keyBytes)
+if err != nil {
+    panic(err)
+}
+
+// Ahora puedes usar las funciones globales
+encrypted, _ := crypto.EncryptString("datos-sensibles")
+```
+
+#### Cifrado con Clave Específica (Sin Global)
+
+```go
+// Útil para multi-tenancy o claves rotativas
+key1, _ := crypto.GenerateEncryptionKey()
+key2, _ := crypto.GenerateEncryptionKey()
+
+encrypted1, _ := crypto.EncryptWithKey("datos-tenant1", key1)
+encrypted2, _ := crypto.EncryptWithKey("datos-tenant2", key2)
+
+decrypted1, _ := crypto.DecryptWithKey(encrypted1, key1)
+decrypted2, _ := crypto.DecryptWithKey(encrypted2, key2)
+```
+
+---
+
+## 📖 API Reference
+
+### Funciones de Conveniencia (Uso Rápido)
+
+#### Hashing
+| Función | Descripción | Retorna |
+|---------|-------------|---------|
+| `HashPassword(password string)` | Hash con Argon2id por defecto | `(hash, error)` |
+| `VerifyPassword(password, hash string)` | Verifica contraseña contra hash | `(bool, error)` |
+| `NeedsUpgrade(hash string)` | Chequea si hash necesita actualización | `bool` |
+| `SetDefaultHasher(hasher Hasher)` | Cambia hasher global | `-` |
+
+#### Funciones Directas por Algoritmo
+| Función | Algoritmo | Defaults |
+|---------|-----------|----------|
+| `HashWithArgon2id(password)` | Argon2id | 64MB, 3 iter, 4 parallel |
+| `HashWithBcrypt(password)` | Bcrypt | Cost 12 |
+| `HashWithScrypt(password)` | Scrypt | N=16384, r=8, p=1 |
+| `HashWithPBKDF2(password)` | PBKDF2-SHA256 | 600k iteraciones |
+
+#### Cifrado
+| Función | Descripción | Nota |
+|---------|-------------|------|
+| `EncryptString(plaintext string)` | Cifra string con clave global | ⚠️ Configurar clave primero |
+| `DecryptString(ciphertext string)` | Descifra string con clave global | - |
+| `EncryptBytes(plaintext []byte)` | Cifra bytes con clave global | - |
+| `DecryptBytes(ciphertext string)` | Descifra bytes a []byte | - |
+| `SetEncryptionKey(key []byte)` | Configura clave global (32 bytes) | **Obligatorio en producción** |
+| `EncryptWithKey(plaintext, key)` | Cifra con clave específica | Sin usar global |
+| `DecryptWithKey(ciphertext, key)` | Descifra con clave específica | - |
+
+#### Generación Aleatoria
+| Función | Descripción | Ejemplo de Salida |
+|---------|-------------|-------------------|
+| `GenerateRandomBytes(n int)` | n bytes seguros | `[0x3a, 0x7f, ...]` |
+| `GenerateRandomString(n int)` | String URL-safe de n chars | `"aB3xK9mP2qL5nR8w..."` |
+| `GenerateSecureToken()` | Token hex de 32 bytes | `"a1b2c3d4e5f6..."` (64 chars) |
+| `GenerateUUIDv4()` | UUID versión 4 | `"550e8400-e29b-41d4-a716-446655440000"` |
+| `GenerateAPIKeyWithPrefix(prefix)` | API key con prefijo | `"usr_a1b2c3d4..."` |
+| `GenerateOTP(length int)` | Código numérico OTP | `"482913"` (6 dígitos) |
+
+### Interfaces
+
+#### Hasher
 ```go
 type Hasher interface {
     Hash(password string) (string, error)
@@ -79,116 +341,7 @@ type Hasher interface {
 }
 ```
 
-- **`Hash`**: genera un hash con salt aleatorio, codificando en el propio string todos los parámetros usados (algoritmo, costo, memoria, iteraciones, etc.) para que siempre pueda verificarse aunque la configuración por defecto cambie más adelante.
-- **`Verify`**: extrae los parámetros del hash almacenado y compara la contraseña usando comparación en tiempo constante (`crypto/subtle`).
-- **`NeedsUpgrade`**: indica si el hash fue generado con parámetros más débiles que los configurados actualmente — útil para regenerar el hash de forma transparente la próxima vez que el usuario inicie sesión ("rehash on login").
-
-## ⚙️ Algoritmos disponibles
-
-| Algoritmo   | Constante                  | Cuándo usarlo                                                        |
-|-------------|-----------------------------|------------------------------------------------------------------------|
-| Argon2id    | `AlgorithmArgon2id`         | Opción por defecto recomendada. Ganador del PHC (2015), resistente a GPU/ASIC. |
-| Bcrypt      | `AlgorithmBcrypt`           | Estándar de la industria, ampliamente soportado y probado en el tiempo. |
-| Scrypt      | `AlgorithmScrypt`           | Alternativa con uso intensivo de memoria, para sistemas legacy o requisitos específicos. |
-| PBKDF2-SHA256 | `AlgorithmPBKDF2`         | Estándar NIST (SP 800-132), útil en entornos enterprise/regulados que lo exijan. |
-
-### Argon2id
-
-```go
-hasher, _ := crypto.NewHasher(crypto.HasherConfig{
-    Algorithm:         crypto.AlgorithmArgon2id,
-    Argon2Memory:      64 * 1024, // KB (64 MB)
-    Argon2Iterations:  3,
-    Argon2Parallelism: 4,
-    Argon2KeyLength:   32,
-    Argon2SaltLength:  16,
-})
-```
-
-Valores por defecto si no se especifican (o si son inválidos): 64 MB de memoria, 3 iteraciones, paralelismo 4, clave de 32 bytes, salt de 16 bytes — según RFC 9106.
-
-Formato del hash: `$argon2id$v=19$m=<memoria>,t=<iteraciones>,p=<paralelismo>$<salt>$<hash>`
-
-### Bcrypt
-
-```go
-hasher, _ := crypto.NewHasher(crypto.HasherConfig{
-    Algorithm:  crypto.AlgorithmBcrypt,
-    BcryptCost: 12,
-})
-```
-
-Costo recomendado: 10 en desarrollo, 12 en producción estándar, 14+ para alta seguridad. Si no se especifica o es inválido, se usa 12.
-
-Bcrypt trabaja con un límite máximo de 72 bytes por contraseña. Este módulo **no trunca** contraseñas más largas (lo cual descartaría silenciosamente parte de la contraseña); en su lugar, las pre-hashea con SHA-256 y codifica el resultado en base64 antes de pasarlo a bcrypt, preservando toda la entropía de la contraseña original.
-
-### Scrypt
-
-```go
-hasher, _ := crypto.NewHasher(crypto.HasherConfig{
-    Algorithm:     crypto.AlgorithmScrypt,
-    ScryptN:       16384, // debe ser potencia de 2
-    ScryptR:       8,
-    ScryptP:       1,
-    ScryptKeyLen:  32,
-    ScryptSaltLen: 16,
-})
-```
-
-`N` debe ser una potencia de 2 (por defecto 2^14 = 16384). Formato del hash: `$scrypt$ln=<log2(N)>,r=<r>,p=<p>$<salt>$<hash>`.
-
-### PBKDF2-SHA256
-
-```go
-hasher, _ := crypto.NewHasher(crypto.HasherConfig{
-    Algorithm:        crypto.AlgorithmPBKDF2,
-    PBKDF2Iterations: 600000, // recomendación OWASP 2023 para SHA-256
-    PBKDF2KeyLen:     32,
-    PBKDF2SaltLen:    16,
-})
-```
-
-Formato del hash: `$pbkdf2-sha256$i=<iteraciones>$<salt>$<hash>`.
-
-> OWASP recomienda incrementar el número de iteraciones con el tiempo a medida que el hardware se vuelve más rápido.
-
-## 🔎 Detección automática de algoritmo
-
-Si tu aplicación necesita soportar varios algoritmos a la vez (por ejemplo, durante una migración), `DetectAlgorithm` identifica qué algoritmo generó un hash dado, a partir de su prefijo:
-
-```go
-alg, err := crypto.DetectAlgorithm(storedHash)
-if err != nil {
-    // hash con formato desconocido o no soportado
-}
-
-hasher, _ := crypto.NewHasher(crypto.HasherConfig{Algorithm: alg})
-ok, _ := hasher.Verify(password, storedHash)
-```
-
-## 🔄 Migración progresiva de parámetros (rehash on login)
-
-Cuando decides subir el costo de bcrypt, la memoria de argon2id, o las iteraciones de scrypt/PBKDF2, no hace falta invalidar los hashes existentes. Verifica con `NeedsUpgrade` en cada login exitoso y regenera el hash si es necesario:
-
-```go
-ok, err := hasher.Verify(password, storedHash)
-if err != nil || !ok {
-    // credenciales inválidas
-    return
-}
-
-if hasher.NeedsUpgrade(storedHash) {
-    newHash, err := hasher.Hash(password)
-    if err == nil {
-        // persistir newHash en reemplazo de storedHash
-    }
-}
-```
-
-## 🔐 Cifrado simétrico (AES-256-GCM)
-
-La interfaz `Encrypter` cubre cifrado/descifrado simétrico autenticado con AES-256 en modo GCM (AEAD): además de confidencialidad, detecta cualquier manipulación de los datos cifrados.
-
+#### Encrypter
 ```go
 type Encrypter interface {
     Encrypt(plaintext []byte) (string, error)
@@ -198,107 +351,325 @@ type Encrypter interface {
 }
 ```
 
+### Tipos y Constantes
+
+#### Algorithm
 ```go
-// Generar una clave de 256 bits y guardarla de forma segura
-// (variable de entorno, vault, KMS...)
-key, err := crypto.GenerateEncryptionKey()
-if err != nil {
-    panic(err)
-}
+type Algorithm string
 
-encrypter, err := crypto.NewAESEncrypter(key)
-if err != nil {
-    panic(err)
-}
-
-encrypted, err := encrypter.EncryptString("número de tarjeta: 4111-1111-1111-1111")
-if err != nil {
-    panic(err)
-}
-
-decrypted, err := encrypter.DecryptString(encrypted)
-if err != nil {
-    // clave incorrecta o datos manipulados/corruptos
-}
-```
-
-- La clave debe tener **exactamente 32 bytes** (AES-256); `NewAESEncrypter` devuelve `ErrInvalidKeyLength` si no cumple este requisito.
-- Cada llamada a `Encrypt`/`EncryptString` genera un **nonce aleatorio de 12 bytes** distinto, obligatorio para la seguridad de GCM.
-- El resultado se codifica en base64 con el formato `base64(nonce + ciphertext + tag)`, listo para guardar en una columna de texto o transmitir por HTTP.
-- Si pierdes la clave, los datos cifrados con ella son **irrecuperables**: no existe forma de reconstruirla.
-
-```go
-// También disponible: obtener la clave ya codificada en base64
-keyBase64, err := crypto.GenerateEncryptionKeyBase64()
-```
-
-## 🎲 Generación de datos aleatorios seguros
-
-Todas las funciones usan `crypto/rand` (nunca `math/rand`), por lo que son aptas para tokens, claves y códigos de un solo uso.
-
-| Función | Uso típico |
-|---|---|
-| `RandomBytes(n int)` | Base criptográfica para construir otros generadores |
-| `RandomString(n int)` | Session IDs, tokens CSRF, identificadores en URLs |
-| `RandomHex(n int)` | Refresh tokens, API keys, tokens de verificación por email |
-| `GenerateUUID()` | Identificadores únicos distribuidos (UUID v4, RFC 4122) |
-| `GenerateAPIKey(prefix string)` | API keys con formato `prefijo_hexAleatorio` (prefijo por defecto: `gk`) |
-| `GenerateNumericCode(length int)` | OTPs por SMS/email, PINs temporales, códigos 2FA |
-
-```go
-sessionID, _ := crypto.RandomString(32)     // "aB3xK9mP2qL5nR8wT1yU4zV6cF0hJ7d"
-token, _     := crypto.RandomHex(32)        // 64 caracteres hex
-id, _        := crypto.GenerateUUID()       // "550e8400-e29b-41d4-a716-446655440000"
-apiKey, _    := crypto.GenerateAPIKey("usr") // "usr_a1b2c3d4e5f6..."
-otp, _       := crypto.GenerateNumericCode(6) // "482913"
-```
-
-`GenerateAPIKey` valida que el prefijo sea alfanumérico (devuelve `ErrInvalidPrefix` si no lo es) para evitar inyección en el identificador resultante.
-
-## ❗ Errores del paquete
-
-**Hashing** (`hash.go`)
-```go
-var (
-    ErrInvalidHash          = errors.New("formato de hash inválido")
-    ErrUnsupportedAlgorithm = errors.New("algoritmo de hashing no soportado")
-    ErrPasswordTooShort     = errors.New("la contraseña es demasiado corta")
-    ErrPasswordTooLong      = errors.New("la contraseña es demasiado larga")
+const (
+    AlgorithmBcrypt    Algorithm = "bcrypt"
+    AlgorithmArgon2id  Algorithm = "argon2id"  // ✅ Recomendado
+    AlgorithmScrypt    Algorithm = "scrypt"
+    AlgorithmPBKDF2    Algorithm = "pbkdf2"
 )
 ```
 
-`ErrPasswordTooShort` y `ErrPasswordTooLong` están pensados para la capa de validación de tu aplicación (este paquete no impone longitudes mínimas/máximas por sí mismo, salvo el manejo especial de bcrypt ya descrito).
-
-**Cifrado** (`encrypt.go`)
+#### HasherConfig
 ```go
-var (
-    ErrInvalidKeyLength  = errors.New("la clave debe tener exactamente 32 bytes para AES-256")
-    ErrEncryptionFailed  = errors.New("fallo al cifrar los datos")
-    ErrDecryptionFailed  = errors.New("fallo al descifrar los datos")
-    ErrInvalidCiphertext = errors.New("formato de texto cifrado inválido")
-)
+type HasherConfig struct {
+    Algorithm Algorithm
+    
+    // Bcrypt
+    BcryptCost int
+    
+    // Argon2id
+    Argon2Memory      uint32 // KB
+    Argon2Iterations  uint32
+    Argon2Parallelism uint8
+    Argon2KeyLength   uint32
+    Argon2SaltLength  uint32
+    
+    // Scrypt
+    ScryptN       int
+    ScryptR       int
+    ScryptP       int
+    ScryptKeyLen  int
+    ScryptSaltLen int
+    
+    // PBKDF2
+    PBKDF2Iterations int
+    PBKDF2KeyLen     int
+    PBKDF2SaltLen    int
+}
 ```
 
-`ErrDecryptionFailed` es intencionalmente genérico: no distingue entre "clave incorrecta" y "datos manipulados" para no dar pistas a un atacante.
+### Errores
 
-**Datos aleatorios** (`random.go`)
+#### Hashing
+| Error | Descripción |
+|-------|-------------|
+| `ErrInvalidHash` | Formato de hash inválido |
+| `ErrUnsupportedAlgorithm` | Algoritmo no registrado |
+| `ErrPasswordTooShort` | Contraseña < mínimo seguro |
+| `ErrPasswordTooLong` | Contraseña > máximo (mitiga DoS) |
+
+#### Cifrado
+| Error | Descripción |
+|-------|-------------|
+| `ErrInvalidKeyLength` | Clave ≠ 32 bytes |
+| `ErrEncryptionFailed` | Fallo al cifrar |
+| `ErrDecryptionFailed` | Clave incorrecta o datos corruptos |
+| `ErrInvalidCiphertext` | Formato inválido |
+
+#### Generación Aleatoria
+| Error | Descripción |
+|-------|-------------|
+| `ErrInvalidLength` | Longitud ≤ 0 |
+| `ErrRandomGenerationFailed` | Fallo del sistema (muy raro) |
+| `ErrInvalidPrefix` | Prefijo con caracteres no alfanuméricos |
+
+---
+
+## 💡 Ejemplos Completos
+
+### Sistema de Autenticación con Migración Gradual
+
 ```go
-var (
-    ErrInvalidLength          = errors.New("la longitud debe ser mayor que cero")
-    ErrRandomGenerationFailed = errors.New("fallo al generar datos aleatorios seguros")
-    ErrInvalidPrefix          = errors.New("el prefijo debe ser alfanumérico")
+package auth
+
+import (
+    "database/sql"
+    "github.com/tu-usuario/gokit/security/crypto"
 )
+
+type UserService struct {
+    db *sql.DB
+}
+
+func (s *UserService) Register(email, password string) error {
+    // Hashear con algoritmo actual (Argon2id por defecto)
+    hash, err := crypto.HashPassword(password)
+    if err != nil {
+        return err
+    }
+    
+    // Guardar en BD
+    _, err = s.db.Exec(
+        "INSERT INTO users (email, password_hash) VALUES (?, ?)",
+        email, hash,
+    )
+    return err
+}
+
+func (s *UserService) Login(email, password string) (*User, error) {
+    // Obtener usuario y hash
+    var user User
+    var storedHash string
+    err := s.db.QueryRow(
+        "SELECT id, email, password_hash FROM users WHERE email = ?",
+        email,
+    ).Scan(&user.ID, &user.Email, &storedHash)
+    
+    if err == sql.ErrNoRows {
+        return nil, fmt.Errorf("usuario no encontrado")
+    }
+    if err != nil {
+        return nil, err
+    }
+    
+    // Verificar contraseña (detecta algoritmo automáticamente)
+    valid, err := crypto.VerifyPassword(password, storedHash)
+    if err != nil || !valid {
+        return nil, fmt.Errorf("credenciales inválidas")
+    }
+    
+    // Migración gradual: si necesita upgrade, regenerar hash
+    if crypto.NeedsUpgrade(storedHash) {
+        newHash, err := crypto.HashPassword(password)
+        if err == nil {
+            s.db.Exec(
+                "UPDATE users SET password_hash = ? WHERE id = ?",
+                newHash, user.ID,
+            )
+        }
+    }
+    
+    return &user, nil
+}
 ```
 
-## 🔒 Notas de seguridad
+### Gestión de Sesiones Seguras
 
-- Todas las comparaciones de hash usan `crypto/subtle.ConstantTimeCompare` para evitar ataques de timing.
-- El salt se genera con `crypto/rand` (criptográficamente seguro) en cada llamada a `Hash`.
-- Cada hash incluye sus propios parámetros, por lo que cambiar la configuración por defecto del paquete nunca invalida hashes ya emitidos.
-- Si no tienes un requisito específico (compliance, sistema legacy), **Argon2id** es la opción recomendada para nuevos proyectos.
-- El cifrado usa AES-256-GCM (AEAD): un nonce distinto por operación y verificación de integridad incluida; nunca reutilices manualmente un nonce con la misma clave.
-- Toda la generación aleatoria del paquete (`random.go`, salts, nonces, claves) se basa en `crypto/rand`, el generador criptográficamente seguro del sistema operativo — nunca en `math/rand`.
+```go
+package session
 
-## 📜 Licencia
+import (
+    "github.com/tu-usuario/gokit/security/crypto"
+)
 
-MIT
+type SessionManager struct {
+    encryptionKey []byte
+}
+
+func NewSessionManager() (*SessionManager, error) {
+    // Generar o cargar clave de cifrado
+    keyBase64 := os.Getenv("SESSION_ENCRYPTION_KEY")
+    keyBytes, err := base64.StdEncoding.DecodeString(keyBase64)
+    if err != nil {
+        return nil, err
+    }
+    
+    return &SessionManager{encryptionKey: keyBytes}, nil
+}
+
+func (m *SessionManager) CreateSession(userID string) (string, error) {
+    // Generar ID de sesión seguro
+    sessionID, err := crypto.GenerateRandomString(32)
+    if err != nil {
+        return "", err
+    }
+    
+    // Cifrar datos de sesión
+    sessionData := fmt.Sprintf("%s:%d", userID, time.Now().Unix())
+    encrypted, err := crypto.EncryptWithKey(sessionData, m.encryptionKey)
+    if err != nil {
+        return "", err
+    }
+    
+    return sessionID, nil
+}
+
+func (m *SessionManager) ValidateSession(token string) (string, error) {
+    // Descifrar datos de sesión
+    decrypted, err := crypto.DecryptWithKey(token, m.encryptionKey)
+    if err != nil {
+        return "", fmt.Errorf("sesión inválida")
+    }
+    
+    // Parsear userID
+    parts := strings.Split(decrypted, ":")
+    if len(parts) != 2 {
+        return "", fmt.Errorf("formato de sesión inválido")
+    }
+    
+    return parts[0], nil
+}
+```
+
+### Generación de API Keys para Usuarios
+
+```go
+package api
+
+import (
+    "github.com/tu-usuario/gokit/security/crypto"
+)
+
+type APIKeyService struct {
+    db *sql.DB
+}
+
+func (s *APIKeyService) GenerateKey(userID int, name string) (string, error) {
+    // Generar API key única
+    apiKey, err := crypto.GenerateAPIKeyWithPrefix("ak")
+    if err != nil {
+        return "", err
+    }
+    
+    // Hashear la key antes de guardar (como una contraseña)
+    hashedKey, err := crypto.HashPassword(apiKey)
+    if err != nil {
+        return "", err
+    }
+    
+    // Guardar hash en BD (nunca guardar la key en texto plano)
+    _, err = s.db.Exec(
+        "INSERT INTO api_keys (user_id, name, key_hash, created_at) VALUES (?, ?, ?, NOW())",
+        userID, name, hashedKey,
+    )
+    if err != nil {
+        return "", err
+    }
+    
+    // Retornar la key solo una vez (el usuario debe guardarla)
+    return apiKey, nil
+}
+
+func (s *APIKeyService) ValidateKey(apiKey string) (int, error) {
+    // Buscar todos los hashes de API keys
+    rows, err := s.db.Query("SELECT id, key_hash FROM api_keys WHERE active = true")
+    if err != nil {
+        return 0, err
+    }
+    defer rows.Close()
+    
+    for rows.Next() {
+        var id int
+        var hash string
+        rows.Scan(&id, &hash)
+        
+        valid, err := crypto.VerifyPassword(apiKey, hash)
+        if err == nil && valid {
+            return id, nil
+        }
+    }
+    
+    return 0, fmt.Errorf("API key inválida")
+}
+```
+
+---
+
+## 🔒 Seguridad y Mejores Prácticas
+
+### ✅ DO (Hacer)
+
+1. **Usar Argon2id por defecto** para nuevas aplicaciones
+2. **Configurar clave de cifrado desde variables de entorno** en producción
+3. **Rotar claves periódicamente** y usar `NeedsUpgrade()` para migración gradual
+4. **Validar longitud de contraseñas** (mínimo 8-12 caracteres)
+5. **Almacenar solo hashes**, nunca contraseñas en texto plano
+6. **Usar HTTPS** siempre que se transmitan datos sensibles
+7. **Registrar intentos fallidos** de verificación para detectar ataques
+
+### ❌ DON'T (No Hacer)
+
+1. **NO usar la clave de cifrado por defecto** en producción
+2. **NO almacenar contraseñas** ni claves de cifrado en código fuente
+3. **NO revelar detalles de errores** criptográficos al usuario final
+4. **NO usar algoritmos deprecated** como MD5, SHA-1, o DES
+5. **NO reutilizar nonces** o salts entre diferentes cifrados
+6. **NO hacer log de datos sensibles** ni claves de cifrado
+
+### Parámetros de Seguridad Recomendados (2024)
+
+| Algoritmo | Uso | Parámetros |
+|-----------|-----|------------|
+| **Argon2id** | Nuevo desarrollo | 128 MB, 4 iter, 4 parallel |
+| **Bcrypt** | Legacy/compatibilidad | Cost 12-14 |
+| **PBKDF2** | Enterprise/NIST | 600k+ iteraciones SHA-256 |
+| **AES-256-GCM** | Cifrado simétrico | Clave 32 bytes, nonce 12 bytes |
+
+### Migración entre Algoritmos
+
+El módulo soporta migración transparente:
+
+```go
+func MigrateHashIfNeeded(userID int, password, oldHash string) {
+    // Verificar si el hash antiguo necesita actualización
+    if crypto.NeedsUpgrade(oldHash) {
+        // Generar nuevo hash con parámetros actuales
+        newHash, err := crypto.HashPassword(password)
+        if err == nil {
+            // Actualizar en BD
+            db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", newHash, userID)
+        }
+    }
+}
+```
+
+---
+
+## 📚 Recursos Adicionales
+
+- [OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)
+- [RFC 9106 - Argon2](https://www.rfc-editor.org/rfc/rfc9106.html)
+- [NIST SP 800-132 - PBKDF](https://csrc.nist.gov/publications/detail/sp/800-132/final)
+- [AES-GCM Security Recommendations](https://csrc.nist.gov/publications/detail/sp/800-38d/final)
+
+---
+
+**Versión:** 1.0.0  
+**Licencia:** MIT  
+**Go Version:** 1.26.4+
