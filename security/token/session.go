@@ -563,3 +563,83 @@ func (m *SessionManager) CleanExpiredSessions() (int, error) {
 func (m *SessionManager) GetConfig() SessionConfig {
 	return m.config
 }
+
+// =============================================================================
+// API Global a Nivel de Paquete (Fachada Simplificada)
+// =============================================================================
+
+var defaultSessionManager *SessionManager
+
+func init() {
+	// Instancia global inicializada por defecto con configuración para desarrollo.
+	defaultSessionManager, _ = NewSessionManager(SessionConfig{
+		SecurityLevel:         security.LevelMedium,
+		MaxConcurrentSessions: 5,
+	})
+}
+
+// InitSession permite reconfigurar el manager global de sesiones.
+//
+// Ejemplo:
+//
+//	token.InitSession(token.SessionConfig{
+//	    SecurityLevel:         security.LevelHigh,
+//	    MaxConcurrentSessions: 3,
+//	})
+func InitSession(config SessionConfig) error {
+	manager, err := NewSessionManager(config)
+	if err != nil {
+		return err
+	}
+	defaultSessionManager = manager
+	return nil
+}
+
+// GetDefaultSession devuelve la instancia global actual del SessionManager.
+func GetDefaultSession() *SessionManager {
+	return defaultSessionManager
+}
+
+// --- Funciones globales de uso directo para sesiones ---
+
+// CreateQuickSession crea una sesión rápida usando el manager global.
+func CreateQuickSession(info SessionInfo) (string, error) {
+	return defaultSessionManager.CreateSession(info)
+}
+
+// ValidateQuickSession valida una sesión usando el manager global.
+func ValidateQuickSession(sessionID string) (*Session, error) {
+	return defaultSessionManager.ValidateSession(sessionID)
+}
+
+// RevokeQuickSession revoca una sesión usando el manager global.
+func RevokeQuickSession(sessionID, reason string) error {
+	return defaultSessionManager.RevokeSession(sessionID, reason)
+}
+
+// RevokeAllQuickSessions revoca todas las sesiones de un usuario.
+func RevokeAllQuickSessions(userID, reason string) error {
+	return defaultSessionManager.RevokeAllUserSessions(userID, reason)
+}
+
+// GetQuickUserSessions obtiene las sesiones activas de un usuario.
+func GetQuickUserSessions(userID string) ([]*Session, error) {
+	return defaultSessionManager.GetUserSessions(userID)
+}
+
+// QuickSessionExists verifica si una sesión existe y está activa.
+// Retorna true si la sesión es válida, false en caso contrario.
+func QuickSessionExists(sessionID string) bool {
+	session, err := defaultSessionManager.ValidateSession(sessionID)
+	return err == nil && session != nil && session.IsActive()
+}
+
+// GetSessionUserID extrae el UserID de una sesión válida.
+// Retorna string vacío si la sesión es inválida.
+func GetSessionUserID(sessionID string) string {
+	session, err := defaultSessionManager.GetSession(sessionID)
+	if err != nil || !session.IsActive() {
+		return ""
+	}
+	return session.UserID
+}

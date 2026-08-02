@@ -317,7 +317,6 @@ func (m *JWTManager) GetConfig() JWTConfig {
 	return m.config
 }
 
-
 // =============================================================================
 // API Global a Nivel de Paquete (Fachada Simplificada)
 // =============================================================================
@@ -328,9 +327,9 @@ func init() {
 	// Instancia global inicializada por defecto con credenciales dev/locales.
 	// Esto asegura que la app funcione out-of-the-box sin romper al arrancar.
 	defaultManager, _ = NewJWTManager(JWTConfig{
-		SecretKey:           []byte("gokit-default-super-secret-key-32bytes!!"),
-		Issuer:              "gokit-api",
-		AccessTokenDuration: 15 * time.Minute,
+		SecretKey:            []byte("gokit-default-super-secret-key-32bytes!!"),
+		Issuer:               "gokit-api",
+		AccessTokenDuration:  15 * time.Minute,
 		RefreshTokenDuration: 7 * 24 * time.Hour,
 	})
 }
@@ -377,4 +376,81 @@ func ValidateToken(tokenString string) (*Claims, error) {
 // RefreshAccessToken renueva un access token usando el manager global.
 func RefreshAccessToken(refreshTokenString string) (string, error) {
 	return defaultManager.RefreshAccessToken(refreshTokenString)
+}
+
+// =============================================================================
+// Funciones Helper de Uso Rápido (Uso Directo sin Configurar Manager)
+// =============================================================================
+
+// GenerateQuickToken genera un access token rápido con configuración por defecto.
+// Ideal para prototipado o pruebas rápidas. No recomendado para producción.
+//
+// Ejemplo:
+//
+//	tokenStr, err := token.GenerateQuickToken("user-123", "admin")
+func GenerateQuickToken(userID, role string) (string, error) {
+	claims := Claims{
+		UserID: userID,
+		Role:   role,
+	}
+	return defaultManager.GenerateAccessToken(claims)
+}
+
+// GenerateQuickTokenWithEmail genera un access token rápido incluyendo email.
+// Ideal para prototipado o pruebas rápidas.
+//
+// Ejemplo:
+//
+//	tokenStr, err := token.GenerateQuickTokenWithEmail("user-123", "john@example.com", "user")
+func GenerateQuickTokenWithEmail(userID, email, role string) (string, error) {
+	claims := Claims{
+		UserID: userID,
+		Email:  email,
+		Role:   role,
+	}
+	return defaultManager.GenerateAccessToken(claims)
+}
+
+// ValidateQuickToken valida un token usando la configuración global.
+// Retorna true si el token es válido, false en caso contrario.
+//
+// Ejemplo:
+//
+//	if token.ValidateQuickToken(tokenStr) {
+//	    // Token válido
+//	}
+func ValidateQuickToken(tokenString string) bool {
+	_, err := defaultManager.ValidateToken(tokenString)
+	return err == nil
+}
+
+// ExtractUserID extrae el UserID de un token sin validar completamente.
+// Útil para logging o auditoría antes de la validación formal.
+//
+// Ejemplo:
+//
+//	userID := token.ExtractUserID(tokenStr)
+func ExtractUserID(tokenString string) string {
+	claims, err := defaultManager.ValidateToken(tokenString)
+	if err != nil {
+		return ""
+	}
+	return claims.UserID
+}
+
+// ExtractClaims extrae todos los claims de un token validado.
+// Retorna nil si el token es inválido.
+//
+// Ejemplo:
+//
+//	claims := token.ExtractClaims(tokenStr)
+//	if claims != nil {
+//	    fmt.Println(claims.Role)
+//	}
+func ExtractClaims(tokenString string) *Claims {
+	claims, err := defaultManager.ValidateToken(tokenString)
+	if err != nil {
+		return nil
+	}
+	return claims
 }
