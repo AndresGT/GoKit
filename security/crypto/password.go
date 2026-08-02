@@ -26,15 +26,6 @@ func SetDefaultHasher(hasher Hasher) {
 }
 
 func HashPassword(password string) (string, error) {
-	charCount := utf8.RuneCountInString(password)
-
-	if charCount < 8 {
-		return "", ErrPasswordTooShort // Usa directamente el error de hash.go
-	}
-	if charCount > 72 {
-		return "", ErrPasswordTooLong // Usa directamente el error de hash.go
-	}
-
 	return defaultHasher.Hash(password)
 }
 
