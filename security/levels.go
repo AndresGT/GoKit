@@ -15,10 +15,14 @@ import "time"
 type Level uint8
 
 const (
+	// LevelDefault es el valor cero: cuando SecurityLevel no se configura
+	// explícitamente, GetDefaults() aplica los parámetros de LevelMedium.
+	LevelDefault Level = iota
+
 	// LevelLow: Para entornos de desarrollo o aplicaciones internas de bajo riesgo.
 	// Hashing rápido (bcrypt cost 10), tokens de larga duración (24h),
 	// límites permisivos. NO usar en producción con datos sensibles.
-	LevelLow Level = iota
+	LevelLow
 
 	// LevelMedium: Para aplicaciones estándar de producción (recomendado por defecto).
 	// Equilibrio entre seguridad y rendimiento. Bcrypt cost 12, JWT 1h,
@@ -137,6 +141,8 @@ func (l Level) GetDefaults() SecurityDefaults {
 // Útil para logging y mensajes de auditoría.
 func (l Level) String() string {
 	switch l {
+	case LevelDefault:
+		return "DEFAULT"
 	case LevelLow:
 		return "LOW"
 	case LevelMedium:

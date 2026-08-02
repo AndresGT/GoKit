@@ -10,21 +10,20 @@ import (
 // =============================================================================
 
 // Hasher define el contrato que deben cumplir todos los proveedores de hashing
-// de contraseñas. Esta abstracción permite cambiar el algoritmo sin modificar
-// el código que lo utiliza (principio Open/Closed).
+// de contraseñas. Esta abstracción permite cambiar el algoritmo subyacente sin
+// modificar el código consumidor (principio Open/Closed).
 type Hasher interface {
 	// Hash genera un hash seguro de la contraseña proporcionada.
-	// La contraseña debe ser validada antes de llamar a este método.
 	Hash(password string) (string, error)
 
 	// Verify compara una contraseña en texto plano con un hash almacenado.
 	// Devuelve true si coinciden, false en caso contrario.
-	// IMPORTANTE: Usa comparación de tiempo constante para prevenir ataques
-	// de timing.
+	// Nota: Debe implementarse usando comparación en tiempo constante (subtle.ConstantTimeCompare)
+	// para prevenir ataques de temporización (timing attacks).
 	Verify(password, hash string) (bool, error)
 
 	// NeedsUpgrade determina si un hash existente debe ser regenerado
-	// (por ejemplo, si los parámetros de seguridad han aumentado).
+	// (ej. si el algoritmo por defecto cambió o si los parámetros de seguridad han aumentado).
 	NeedsUpgrade(hash string) bool
 }
 
@@ -32,101 +31,78 @@ type Hasher interface {
 // Tipos de Algoritmos
 // =============================================================================
 
-// Algorithm representa el tipo de algoritmo de hashing disponible.
+// Algorithm representa el identificador del algoritmo de hashing de contraseñas.
 type Algorithm string
 
 const (
-	// AlgorithmBcrypt es el estándar de la industria, ampliamente soportado.
-	// Recomendado para la mayoría de aplicaciones.
+	// AlgorithmBcrypt es el estándar clásico ampliamente soportado.
 	AlgorithmBcrypt Algorithm = "bcrypt"
 
-	// AlgorithmArgon2id es el ganador del Password Hashing Competition (2015).
-	// Resistente a ataques GPU/ASIC. Recomendado para máxima seguridad.
+	// AlgorithmArgon2id es el ganador del Password Hashing Competition (PHC).
+	// Es el estándar recomendado actualmente por OWASP por su resistencia a GPUs/ASICs.
 	AlgorithmArgon2id Algorithm = "argon2id"
 
-	// AlgorithmScrypt es una alternativa a bcrypt con uso intensivo de memoria.
-	// Bueno para sistemas legacy o requisitos específicos.
+	// AlgorithmScrypt es una alternativa con uso intensivo de memoria, útil para sistemas legacy.
 	AlgorithmScrypt Algorithm = "scrypt"
 
-	// AlgorithmPBKDF2 es el estándar NIST, usado en muchas aplicaciones enterprise.
-	// Compatible con sistemas legacy que lo requieran.
+	// AlgorithmPBKDF2 es el estándar NIST tradicional para entornos corporativos o legacy.
 	AlgorithmPBKDF2 Algorithm = "pbkdf2"
 )
 
 // =============================================================================
-// Errores
+// Errores Específicos del Módulo de Hashing
 // =============================================================================
 
 var (
-	// ErrInvalidHash se retorna cuando el formato del hash no es válido
-	// o no puede ser parseado.
+	// ErrInvalidHash se retorna cuando el formato del hash no cumple con la especificación PHC
+	// o no puede ser interpretado por ningún parser.
 	ErrInvalidHash = errors.New("formato de hash inválido")
 
-	// ErrUnsupportedAlgorithm se retorna cuando se intenta usar un algoritmo
-	// que no está disponible o no es soportado.
+	// ErrUnsupportedAlgorithm se retorna al solicitar un algoritmo no registrado o no disponible.
 	ErrUnsupportedAlgorithm = errors.New("algoritmo de hashing no soportado")
 
-	// ErrPasswordTooShort se retorna cuando la contraseña no cumple con
-	// la longitud mínima requerida.
+	// ErrPasswordTooShort se retorna si la contraseña no cumple el tamaño mínimo seguro.
 	ErrPasswordTooShort = errors.New("la contraseña es demasiado corta")
 
-	// ErrPasswordTooLong se retorna cuando la contraseña excede la longitud
-	// máxima permitida (previene ataques DoS en algunos algoritmos).
+	// ErrPasswordTooLong se retorna si la contraseña excede el tamaño máximo permitido (mitiga DoS).
 	ErrPasswordTooLong = errors.New("la contraseña es demasiado larga")
 )
 
 // =============================================================================
-// Fábrica de Proveedores
+// Configuración y Fábrica (Factory)
 // =============================================================================
 
-// HasherConfig contiene los parámetros de configuración para crear un Hasher.
+// HasherConfig contiene los parámetros necesarios para instanciar cualquier proveedor Hasher.
 type HasherConfig struct {
-	// Algorithm es el algoritmo de hashing a utilizar.
+	// Algorithm especifica qué algoritmo se instanciará.
 	Algorithm Algorithm
 
-	// Parámetros específicos de cada algoritmo (se usan según corresponda)
-
-	// Bcrypt
+	// --- Parámetros específicos de Bcrypt ---
 	BcryptCost int
 
-	// Argon2id
-	Argon2Memory      uint32 // KB
-	Argon2Iterations  uint32
-	Argon2Parallelism uint8
-	Argon2KeyLength   uint32
-	Argon2SaltLength  uint32
+	// --- Parámetros específicos de Argon2id ---
+	Argon2Memory      uint32 // Memoria en KB (ej. 65536 = 64MB)
+	Argon2Iterations  uint32 // Número de pasadas
+	Argon2Parallelism uint8  // Goroutines en paralelo
+	Argon2KeyLength   uint32 // Longitud de la clave generada
+	Argon2SaltLength  uint32 // Longitud del salt
 
-	// Scrypt
+	// --- Parámetros específicos de Scrypt ---
 	ScryptN       int
 	ScryptR       int
 	ScryptP       int
 	ScryptKeyLen  int
 	ScryptSaltLen int
 
-	// PBKDF2
+	// --- Parámetros específicos de PBKDF2 ---
 	PBKDF2Iterations int
 	PBKDF2KeyLen     int
 	PBKDF2SaltLen    int
 }
 
-// NewHasher crea y devuelve un Hasher configurado según el algoritmo especificado.
-// Si la configuración es inválida o incompleta, se aplican valores predeterminados
-// seguros para el algoritmo seleccionado.
-//
-// Ejemplo de uso:
-//
-//	// Usar bcrypt con configuración por defecto
-//	hasher, err := crypto.NewHasher(crypto.HasherConfig{
-//	    Algorithm: crypto.AlgorithmBcrypt,
-//	})
-//
-//	// Usar argon2id con parámetros personalizados
-//	hasher, err := crypto.NewHasher(crypto.HasherConfig{
-//	    Algorithm:         crypto.AlgorithmArgon2id,
-//	    Argon2Memory:      64 * 1024, // 64 MB
-//	    Argon2Iterations:  3,
-//	    Argon2Parallelism: 4,
-//	})
+// NewHasher crea y devuelve un proveedor que implementa la interfaz Hasher.
+// Si los parámetros numéricos de la configuración son 0, la implementación concreta
+// asignará defaults seguros automáticamente.
 func NewHasher(cfg HasherConfig) (Hasher, error) {
 	switch cfg.Algorithm {
 	case AlgorithmBcrypt:
@@ -142,11 +118,10 @@ func NewHasher(cfg HasherConfig) (Hasher, error) {
 	}
 }
 
-// DetectAlgorithm examina un hash y determina qué algoritmo fue usado
-// para generarlo. Esto es útil para sistemas que necesitan soportar
-// múltiples algoritmos simultáneamente (migración gradual).
+// DetectAlgorithm analiza la cabecera de la cadena de hash (formato PHC)
+// y determina el algoritmo utilizado para su generación.
 //
-// El formato esperado es: $algorithm$params$salt$hash
+// Formato general esperado: $identificador$parametros...
 func DetectAlgorithm(hash string) (Algorithm, error) {
 	if !strings.HasPrefix(hash, "$") {
 		return "", ErrInvalidHash

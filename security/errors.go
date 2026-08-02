@@ -7,19 +7,35 @@ import "errors"
 // =============================================================================
 
 // Errores transversales de alto nivel que pueden ser usados por cualquier
-// submódulo de security (token, rules, policy, etc.).
+// submódulo de security (crypto, token, rules, policy, middleware, etc.).
 //
 // PRINCIPIO DE DISEÑO:
-// 1. NO exponen detalles internos (algoritmos, estructuras, etc.)
-// 2. Previenen ataques de enumeración (mismo error para múltiples causas)
-// 3. Son genéricos pero descriptivos para el usuario final
-// 4. Los errores específicos de criptografía viven en security/crypto/
-//
-// NOTA: Los errores de hashing (ErrInvalidHash, ErrUnsupportedAlgorithm)
-// y cifrado (ErrInvalidKeyLength, ErrEncryptionFailed) están definidos
-// en sus respectivos paquetes: security/crypto/hash.go y encrypt.go.
+// 1. NO exponen detalles internos (algoritmos, estructuras, claves, etc.)
+// 2. Previenen ataques de enumeración (mismo error genérico para múltiples causas)
+// 3. Son genéricos pero descriptivos para el usuario final o API
+// 4. Centralizan colisiones comunes del paquete (como validaciones de hashes y ciphers)
 
 var (
+	// -----------------------------------------------------------------------------
+	// Criptografía y Hashing (Agregados para resolver colisiones en subpaquetes)
+	// -----------------------------------------------------------------------------
+
+	// ErrInvalidHash se retorna cuando un hash (Argon2, Bcrypt, etc.) no cumple
+	// con la estructura PHC o está corrupto.
+	ErrInvalidHash = errors.New("el hash provisto no tiene un formato válido")
+
+	// ErrIncompatibleVersion se retorna cuando el algoritmo o la versión del
+	// hash no es compatible con la configuración actual del sistema.
+	ErrIncompatibleVersion = errors.New("versión o algoritmo inalcanzable")
+
+	// ErrInvalidCiphertext se retorna cuando el payload cifrado (AES-GCM) no se
+	// puede autenticar o descifrar debido a corrupción o clave errónea.
+	ErrInvalidCiphertext = errors.New("el texto cifrado no es válido o está corrupto")
+
+	// ErrInvalidKeyLength se retorna cuando una clave secreta no cumple
+	// con los requerimientos de tamaño del algoritmo (ej. AES-256 requiere 32 bytes).
+	ErrInvalidKeyLength = errors.New("longitud de clave no válida")
+
 	// -----------------------------------------------------------------------------
 	// Autenticación y Autorización
 	// -----------------------------------------------------------------------------

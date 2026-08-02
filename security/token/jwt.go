@@ -241,11 +241,10 @@ func (m *JWTManager) generateToken(claims Claims, duration time.Duration) (strin
 //	fmt.Println(claims.UserID)
 //	fmt.Println(claims.Role)
 func (m *JWTManager) ValidateToken(tokenString string) (*Claims, error) {
-	// Parsear y validar el token
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		// Verificar que el método de firma sea el esperado (HMAC-SHA256)
-		// Esto previene ataques de confusión de algoritmos (algorithm confusion attacks)
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+	parser := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+
+	token, err := parser.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		if token.Method != jwt.SigningMethodHS256 {
 			return nil, ErrJWTSigningMethodInvalid
 		}
 		return m.config.SecretKey, nil
@@ -262,6 +261,10 @@ func (m *JWTManager) ValidateToken(tokenString string) (*Claims, error) {
 	// Extraer claims
 	claims, ok := token.Claims.(*Claims)
 	if !ok || !token.Valid {
+		return nil, ErrJWTInvalid
+	}
+
+	if m.config.Issuer != "" && claims.Issuer != m.config.Issuer {
 		return nil, ErrJWTInvalid
 	}
 
@@ -312,4 +315,66 @@ func (m *JWTManager) RefreshAccessToken(refreshTokenString string) (string, erro
 // Útil para debugging o para verificar los valores configurados.
 func (m *JWTManager) GetConfig() JWTConfig {
 	return m.config
+}
+
+
+// =============================================================================
+// API Global a Nivel de Paquete (Fachada Simplificada)
+// =============================================================================
+
+var defaultManager *JWTManager
+
+func init() {
+	// Instancia global inicializada por defecto con credenciales dev/locales.
+	// Esto asegura que la app funcione out-of-the-box sin romper al arrancar.
+	defaultManager, _ = NewJWTManager(JWTConfig{
+		SecretKey:           []byte("gokit-default-super-secret-key-32bytes!!"),
+		Issuer:              "gokit-api",
+		AccessTokenDuration: 15 * time.Minute,
+		RefreshTokenDuration: 7 * 24 * time.Hour,
+	})
+}
+
+// Init permite reconfigurar el manager global al iniciar la app desde main.go.
+//
+// Ejemplo:
+//
+//	token.Init(token.JWTConfig{
+//	    SecretKey: []byte(os.Getenv("JWT_SECRET")),
+//	    Issuer:    "mi-proyecto",
+//	})
+func Init(config JWTConfig) error {
+	manager, err := NewJWTManager(config)
+	if err != nil {
+		return err
+	}
+	defaultManager = manager
+	return nil
+}
+
+// GetDefault devuelve la instancia global actual del JWTManager.
+func GetDefault() *JWTManager {
+	return defaultManager
+}
+
+// --- Funciones globales de uso directo a nivel de paquete ---
+
+// GenerateAccessToken crea un access token utilizando el manager global.
+func GenerateAccessToken(claims Claims) (string, error) {
+	return defaultManager.GenerateAccessToken(claims)
+}
+
+// GenerateRefreshToken crea un refresh token utilizando el manager global.
+func GenerateRefreshToken(claims Claims) (string, error) {
+	return defaultManager.GenerateRefreshToken(claims)
+}
+
+// ValidateToken valida un token JWT utilizando el manager global.
+func ValidateToken(tokenString string) (*Claims, error) {
+	return defaultManager.ValidateToken(tokenString)
+}
+
+// RefreshAccessToken renueva un access token usando el manager global.
+func RefreshAccessToken(refreshTokenString string) (string, error) {
+	return defaultManager.RefreshAccessToken(refreshTokenString)
 }
