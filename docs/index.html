@@ -3,19 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GoKit - Toolkit de Seguridad para Go</title>
+    <title>GoKit - Toolkit de Seguridad y Utilidades para Go</title>
+    <meta name="description" content="Toolkit interno de Go con utilidades listas para producción: Logging, Criptografía, JWT, Middlewares y Auditoría con IA. Desarrollado por AndresGT.">
+    
+    <!-- Fuentes -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Iconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <style>
         :root {
-            --primary: #00ADD8;
-            --secondary: #005F73;
-            --accent: #0A9396;
-            --dark: #1B2631;
-            --darker: #0D1B2A;
-            --light: #E0E1DD;
-            --success: #2ECC71;
-            --warning: #F39C12;
-            --danger: #E74C3C;
-            --code-bg: #1e1e1e;
+            /* Paleta de Colores Moderna (Dark Theme) */
+            --bg-primary: #0f172a;       /* Slate 900 */
+            --bg-secondary: #1e293b;     /* Slate 800 */
+            --bg-card: #334155;          /* Slate 700 */
+            --text-primary: #f8fafc;     /* Slate 50 */
+            --text-secondary: #94a3b8;   /* Slate 400 */
+            --accent-primary: #00add8;   /* Go Cyan */
+            --accent-secondary: #38bdf8; /* Sky Blue */
+            --accent-glow: rgba(0, 173, 216, 0.3);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            
+            /* Tipografía */
+            --font-main: 'Inter', sans-serif;
+            --font-code: 'Fira Code', monospace;
+            
+            /* Espaciado */
+            --container-width: 1200px;
+            --header-height: 80px;
         }
 
         * {
@@ -24,57 +44,123 @@
             box-sizing: border-box;
         }
 
+        html {
+            scroll-behavior: smooth;
+        }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, var(--darker) 0%, var(--dark) 100%);
-            color: var(--light);
+            font-family: var(--font-main);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
             line-height: 1.6;
             overflow-x: hidden;
         }
 
+        /* --- Utilidades --- */
         .container {
-            max-width: 1400px;
+            max-width: var(--container-width);
             margin: 0 auto;
-            padding: 0 20px;
+            padding: 0 2rem;
         }
 
-        /* Header */
+        .gradient-text {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 0.8rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: var(--bg-primary);
+            box-shadow: 0 4px 15px var(--accent-glow);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px var(--accent-glow);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid var(--accent-primary);
+            color: var(--accent-primary);
+        }
+
+        .btn-outline:hover {
+            background: var(--accent-primary);
+            color: var(--bg-primary);
+        }
+
+        code {
+            font-family: var(--font-code);
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            color: var(--accent-secondary);
+            font-size: 0.9em;
+        }
+
+        pre {
+            background: #0d1117;
+            padding: 1.5rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            border: 1px solid var(--bg-card);
+            position: relative;
+        }
+
+        pre code {
+            background: transparent;
+            padding: 0;
+            color: #e2e8f0;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        /* --- Header & Nav --- */
         header {
-            background: rgba(13, 27, 42, 0.95);
-            backdrop-filter: blur(10px);
-            position: sticky;
+            position: fixed;
             top: 0;
+            left: 0;
+            width: 100%;
+            height: var(--header-height);
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(10px);
             z-index: 1000;
-            border-bottom: 2px solid var(--primary);
-            padding: 1rem 0;
+            border-bottom: 1px solid var(--bg-card);
         }
 
         nav {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            height: 100%;
         }
 
         .logo {
-            font-size: 2rem;
-            font-weight: bold;
-            color: var(--primary);
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
             text-decoration: none;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 0.5rem;
         }
 
-        .logo-icon {
-            width: 40px;
-            height: 40px;
-            background: var(--primary);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            color: white;
+        .logo i {
+            color: var(--accent-primary);
         }
 
         .nav-links {
@@ -84,53 +170,57 @@
         }
 
         .nav-links a {
-            color: var(--light);
+            color: var(--text-secondary);
             text-decoration: none;
             font-weight: 500;
             transition: color 0.3s;
-            position: relative;
         }
 
         .nav-links a:hover {
-            color: var(--primary);
+            color: var(--accent-primary);
         }
 
-        .nav-links a::after {
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        /* --- Hero Section --- */
+        .hero {
+            padding: calc(var(--header-height) + 4rem) 0 6rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
             content: '';
             position: absolute;
-            bottom: -5px;
-            left: 0;
-            width: 0;
-            height: 2px;
-            background: var(--primary);
-            transition: width 0.3s;
-        }
-
-        .nav-links a:hover::after {
-            width: 100%;
-        }
-
-        /* Hero Section */
-        .hero {
-            padding: 6rem 0;
-            text-align: center;
-            background: radial-gradient(circle at center, rgba(0, 173, 216, 0.1) 0%, transparent 70%);
+            top: -50%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 800px;
+            height: 800px;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+            z-index: -1;
+            opacity: 0.5;
         }
 
         .hero h1 {
             font-size: 3.5rem;
             margin-bottom: 1.5rem;
-            background: linear-gradient(135deg, var(--primary), var(--accent));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            line-height: 1.2;
         }
 
         .hero p {
-            font-size: 1.3rem;
-            max-width: 800px;
-            margin: 0 auto 2rem;
-            color: #b0b0b0;
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            max-width: 700px;
+            margin: 0 auto 2.5rem;
         }
 
         .hero-buttons {
@@ -140,801 +230,462 @@
             flex-wrap: wrap;
         }
 
-        .btn {
-            padding: 1rem 2rem;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 600;
-            transition: all 0.3s;
-            display: inline-block;
+        .stats-bar {
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            margin-top: 4rem;
+            padding: 2rem;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            border: 1px solid var(--bg-card);
         }
 
-        .btn-primary {
-            background: var(--primary);
-            color: white;
-            border: 2px solid var(--primary);
+        .stat-item {
+            text-align: center;
         }
 
-        .btn-primary:hover {
-            background: transparent;
-            color: var(--primary);
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent-primary);
+            display: block;
         }
 
-        .btn-secondary {
-            background: transparent;
-            color: var(--primary);
-            border: 2px solid var(--primary);
+        .stat-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
         }
 
-        .btn-secondary:hover {
-            background: var(--primary);
-            color: white;
-        }
-
-        /* Features Grid */
-        .features {
-            padding: 4rem 0;
+        /* --- Modules Section --- */
+        .modules {
+            padding: 6rem 0;
         }
 
         .section-title {
             text-align: center;
-            font-size: 2.5rem;
-            margin-bottom: 3rem;
-            color: var(--primary);
+            margin-bottom: 4rem;
         }
 
-        .grid {
+        .section-title h2 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .section-title p {
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .modules-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
             gap: 2rem;
         }
 
-        .card {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+        .module-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--bg-card);
             border-radius: 12px;
             padding: 2rem;
-            transition: all 0.3s;
-            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
 
-        .card:hover {
+        .module-card:hover {
             transform: translateY(-5px);
-            border-color: var(--primary);
-            box-shadow: 0 10px 30px rgba(0, 173, 216, 0.2);
+            border-color: var(--accent-primary);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
         }
 
-        .card-icon {
+        .module-icon {
             width: 60px;
             height: 60px;
-            background: var(--primary);
+            background: rgba(0, 173, 216, 0.1);
             border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 2rem;
             margin-bottom: 1.5rem;
-        }
-
-        .card h3 {
+            color: var(--accent-primary);
             font-size: 1.5rem;
-            margin-bottom: 1rem;
-            color: var(--primary);
         }
 
-        .card p {
-            color: #b0b0b0;
+        .module-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .module-card p {
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+            font-size: 0.95rem;
+        }
+
+        .features-list {
+            list-style: none;
             margin-bottom: 1.5rem;
         }
 
-        .card-code {
-            background: var(--code-bg);
-            padding: 1rem;
-            border-radius: 6px;
-            font-family: 'Courier New', monospace;
+        .features-list li {
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
             font-size: 0.9rem;
-            overflow-x: auto;
-            border-left: 3px solid var(--primary);
-        }
-
-        .card-code code {
-            color: #d4d4d4;
-        }
-
-        .keyword { color: #569CD6; }
-        .string { color: #CE9178; }
-        .function { color: #DCDCAA; }
-        .comment { color: #6A9955; }
-
-        /* Modules Section */
-        .modules {
-            padding: 4rem 0;
-            background: rgba(0, 0, 0, 0.2);
-        }
-
-        .module-detail {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 12px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-        }
-
-        .module-header {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .module-badge {
-            background: var(--primary);
-            color: white;
-            padding: 0.3rem 0.8rem;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
-        }
-
-        .module-features {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1rem;
-            margin: 1.5rem 0;
-        }
-
-        .feature-item {
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            color: #b0b0b0;
         }
 
-        .feature-item::before {
-            content: '✓';
+        .features-list li i {
             color: var(--success);
-            font-weight: bold;
+            font-size: 0.8rem;
         }
 
-        /* Use Cases */
-        .use-cases {
-            padding: 4rem 0;
+        .code-preview {
+            background: #0d1117;
+            padding: 1rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            color: #e2e8f0;
+            margin-top: 1rem;
+            border-left: 3px solid var(--accent-primary);
         }
 
-        .case-study {
-            background: linear-gradient(135deg, rgba(0, 173, 216, 0.05) 0%, rgba(10, 147, 150, 0.05) 100%);
-            border: 1px solid rgba(0, 173, 216, 0.2);
-            border-radius: 12px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-        }
-
-        .case-study h3 {
-            color: var(--primary);
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
             margin-bottom: 1rem;
-            font-size: 1.5rem;
         }
 
-        .case-study ul {
-            list-style: none;
-            margin: 1rem 0;
+        .badge-new { background: rgba(16, 185, 129, 0.2); color: var(--success); }
+        .badge-core { background: rgba(0, 173, 216, 0.2); color: var(--accent-primary); }
+
+        /* --- Features Detail Section --- */
+        .features-detail {
+            padding: 6rem 0;
+            background: var(--bg-secondary);
         }
 
-        .case-study li {
-            padding: 0.5rem 0;
-            color: #b0b0b0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        .feature-row {
+            display: flex;
+            align-items: center;
+            gap: 4rem;
+            margin-bottom: 4rem;
         }
 
-        .case-study li:last-child {
-            border-bottom: none;
+        .feature-row:nth-child(even) {
+            flex-direction: row-reverse;
         }
 
-        /* Stats Section */
-        .stats {
-            padding: 4rem 0;
-            background: rgba(0, 173, 216, 0.05);
+        .feature-content {
+            flex: 1;
         }
 
-        .stats-grid {
+        .feature-image {
+            flex: 1;
+            background: var(--bg-card);
+            height: 300px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 4rem;
+            color: var(--accent-primary);
+            border: 1px solid var(--bg-card);
+        }
+
+        /* --- Footer --- */
+        footer {
+            background: #020617;
+            padding: 4rem 0 2rem;
+            border-top: 1px solid var(--bg-card);
+        }
+
+        .footer-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 2rem;
-            text-align: center;
+            gap: 3rem;
+            margin-bottom: 3rem;
         }
 
-        .stat-item h3 {
-            font-size: 3rem;
-            color: var(--primary);
-            margin-bottom: 0.5rem;
-        }
-
-        .stat-item p {
-            color: #b0b0b0;
+        .footer-col h4 {
+            color: var(--text-primary);
+            margin-bottom: 1.5rem;
             font-size: 1.1rem;
         }
 
-        /* Footer */
-        footer {
-            background: var(--darker);
-            padding: 3rem 0;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .footer-content {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 2rem;
-            margin-bottom: 2rem;
-        }
-
-        .footer-section h4 {
-            color: var(--primary);
-            margin-bottom: 1rem;
-        }
-
-        .footer-section ul {
+        .footer-col ul {
             list-style: none;
         }
 
-        .footer-section li {
-            margin-bottom: 0.5rem;
+        .footer-col ul li {
+            margin-bottom: 0.8rem;
         }
 
-        .footer-section a {
-            color: #b0b0b0;
+        .footer-col ul li a {
+            color: var(--text-secondary);
             text-decoration: none;
             transition: color 0.3s;
         }
 
-        .footer-section a:hover {
-            color: var(--primary);
+        .footer-col ul li a:hover {
+            color: var(--accent-primary);
         }
 
-        .copyright {
+        .footer-bottom {
             text-align: center;
             padding-top: 2rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            color: #666;
+            border-top: 1px solid var(--bg-card);
+            color: var(--text-secondary);
+            font-size: 0.9rem;
         }
 
-        /* Responsive */
+        .author-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-card);
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+
+        /* --- Responsive --- */
         @media (max-width: 768px) {
-            .hero h1 {
-                font-size: 2.5rem;
-            }
-
-            .nav-links {
-                display: none;
-            }
-
-            .grid {
-                grid-template-columns: 1fr;
-            }
+            .hero h1 { font-size: 2.5rem; }
+            .nav-links { display: none; }
+            .mobile-menu-btn { display: block; }
+            .feature-row { flex-direction: column !important; gap: 2rem; }
+            .stats-bar { flex-direction: column; gap: 1.5rem; }
+            .modules-grid { grid-template-columns: 1fr; }
         }
-
-        /* Scroll animations */
-        .fade-in {
-            opacity: 0;
-            transform: translateY(20px);
-            animation: fadeIn 0.6s ease-out forwards;
-        }
-
-        @keyframes fadeIn {
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .delay-1 { animation-delay: 0.1s; }
-        .delay-2 { animation-delay: 0.2s; }
-        .delay-3 { animation-delay: 0.3s; }
-        .delay-4 { animation-delay: 0.4s; }
     </style>
 </head>
 <body>
+
     <!-- Header -->
     <header>
         <div class="container">
             <nav>
                 <a href="#" class="logo">
-                    <div class="logo-icon">G</div>
-                    GoKit
+                    <i class="fa-brands fa-golang"></i>
+                    GoKit <span style="font-weight: 300; font-size: 0.9rem; color: var(--text-secondary);">by AndresGT</span>
                 </a>
                 <ul class="nav-links">
-                    <li><a href="#features">Características</a></li>
-                    <li><a href="#modules">Módulos</a></li>
-                    <li><a href="#use-cases">Casos de Uso</a></li>
-                    <li><a href="#stats">Estadísticas</a></li>
-                    <li><a href="docs/README_PRINCIPAL.md">Documentación</a></li>
+                    <li><a href="#inicio">Inicio</a></li>
+                    <li><a href="#modulos">Módulos</a></li>
+                    <li><a href="#caracteristicas">Características</a></li>
+                    <li><a href="#auditoria">Auditoría IA</a></li>
+                    <li><a href="https://github.com" target="_blank"><i class="fa-brands fa-github"></i></a></li>
                 </ul>
+                <button class="mobile-menu-btn">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
             </nav>
         </div>
     </header>
 
     <!-- Hero Section -->
-    <section class="hero">
+    <section id="inicio" class="hero">
         <div class="container">
-            <h1 class="fade-in">Toolkit de Seguridad para Go</h1>
-            <p class="fade-in delay-1">
-                Biblioteca completa de utilidades listas para producción con logging, criptografía, 
-                JWT, sesiones, middlewares HTTP y auditoría forense con IA integrada.
+            <h1>El Toolkit Definitivo para <br><span class="gradient-text">Desarrollo Seguro en Go</span></h1>
+            <p>
+                Logger estructurado, Criptografía de grado militar, Gestión de Tokens, Middlewares robustos y 
+                un sistema de Auditoría Forense impulsado por IA. Todo listo para producción.
             </p>
-            <div class="hero-buttons fade-in delay-2">
-                <a href="#modules" class="btn btn-primary">Explorar Módulos</a>
-                <a href="https://github.com/tu-usuario/gokit" class="btn btn-secondary">Ver en GitHub</a>
+            <div class="hero-buttons">
+                <a href="#modulos" class="btn btn-primary">Explorar Módulos</a>
+                <a href="https://github.com" class="btn btn-outline"><i class="fa-brands fa-github"></i> Ver en GitHub</a>
             </div>
-        </div>
-    </section>
 
-    <!-- Features Section -->
-    <section id="features" class="features">
-        <div class="container">
-            <h2 class="section-title">¿Por qué GoKit?</h2>
-            <div class="grid">
-                <div class="card fade-in">
-                    <div class="card-icon">🚀</div>
-                    <h3>Uso Rápido</h3>
-                    <p>Funciones globales listas para usar en una línea de código. Perfecto para prototipado rápido.</p>
-                    <div class="card-code">
-                        <code>
-<span class="keyword">package</span> main<br><br>
-<span class="keyword">import</span> <span class="string">"gokit/security/crypto"</span><br><br>
-<span class="keyword">func</span> <span class="function">main</span>() {<br>
-&nbsp;&nbsp;hash := crypto.<span class="function">HashPassword</span>(<span class="string">"mi_password"</span>)<br>
-}
-                        </code>
-                    </div>
+            <div class="stats-bar">
+                <div class="stat-item">
+                    <span class="stat-value">5</span>
+                    <span class="stat-label">Módulos Core</span>
                 </div>
-
-                <div class="card fade-in delay-1">
-                    <div class="card-icon">⚙️</div>
-                    <h3>Configurable</h3>
-                    <p>Arquitectura dual con constructores para configuración avanzada en producción.</p>
-                    <div class="card-code">
-                        <code>
-<span class="keyword">package</span> main<br><br>
-<span class="keyword">import</span> <span class="string">"gokit/security/crypto"</span><br><br>
-<span class="keyword">func</span> <span class="function">main</span>() {<br>
-&nbsp;&nbsp;config := crypto.<span class="function">DefaultConfig</span>()<br>
-&nbsp;&nbsp;config.Algorithm = <span class="string">"argon2id"</span><br>
-&nbsp;&nbsp;hasher := crypto.<span class="function">NewHasher</span>(config)<br>
-}
-                        </code>
-                    </div>
+                <div class="stat-item">
+                    <span class="stat-value">100+</span>
+                    <span class="stat-label">Tests Unitarios</span>
                 </div>
-
-                <div class="card fade-in delay-2">
-                    <div class="card-icon">🔒</div>
-                    <h3>Seguro por Defecto</h3>
-                    <p>Parámetros de seguridad óptimos, cifrado AES-256-GCM, hashing con Argon2id.</p>
-                    <div class="card-code">
-                        <code>
-<span class="comment">// Parámetros seguros automáticamente</span><br>
-<span class="comment">// - Argon2id: memory=64MB, iterations=3</span><br>
-<span class="comment">// - AES-256-GCM con nonce aleatorio</span><br>
-<span class="comment">// - Generación criptográficamente segura</span>
-                        </code>
-                    </div>
+                <div class="stat-item">
+                    <span class="stat-value">85%</span>
+                    <span class="stat-label">Cobertura</span>
                 </div>
-
-                <div class="card fade-in delay-3">
-                    <div class="card-icon">🧪</div>
-                    <h3>Testeado</h3>
-                    <p>Más de 100 tests unitarios con cobertura del 78%+. Calidad garantizada.</p>
-                    <div class="card-code">
-                        <code>
-<span class="comment">// Ejecutar todos los tests</span><br>
-$ go test ./... -v -cover<br><br>
-<span class="comment">// Cobertura promedio:</span><br>
-<span class="comment">// logger:     62.8%</span><br>
-<span class="comment">// crypto:     75.9%</span><br>
-<span class="comment">// token:      87.7%</span><br>
-<span class="comment">// middleware: 82.4%</span><br>
-<span class="comment">// audit:      84.2%</span>
-                        </code>
-                    </div>
-                </div>
-
-                <div class="card fade-in delay-4">
-                    <div class="card-icon">📚</div>
-                    <h3>Documentado</h3>
-                    <p>Documentación completa con ejemplos reales, casos de uso y mejores prácticas.</p>
-                    <div class="card-code">
-                        <code>
-<span class="comment">// Cada módulo incluye:</span><br>
-<span class="comment">// ✓ README detallado</span><br>
-<span class="comment">// ✓ Ejemplos de código</span><br>
-<span class="comment">// ✓ API Reference</span><br>
-<span class="comment">// ✓ Casos de uso reales</span><br>
-<span class="comment">// ✓ Tests documentados</span>
-                        </code>
-                    </div>
-                </div>
-
-                <div class="card fade-in delay-1">
-                    <div class="card-icon">🤖</div>
-                    <h3>IA Integrada</h3>
-                    <p>Sistema de auditoría con motor de IA para detección de amenazas en tiempo real.</p>
-                    <div class="card-code">
-                        <code>
-<span class="comment">// Detección automática de:</span><br>
-<span class="comment">// • Fuerza bruta</span><br>
-<span class="comment">// • SQL Injection</span><br>
-<span class="comment">// • Viajes imposibles</span><br>
-<span class="comment">// • Scraping masivo</span><br>
-<span class="comment">// • Comportamientos anómalos</span>
-                        </code>
-                    </div>
+                <div class="stat-item">
+                    <span class="stat-value">IA</span>
+                    <span class="stat-label">Detección de Amenazas</span>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- Modules Section -->
-    <section id="modules" class="modules">
+    <section id="modulos" class="modules">
         <div class="container">
-            <h2 class="section-title">Módulos Disponibles</h2>
-            
-            <!-- Logger Module -->
-            <div class="module-detail fade-in">
-                <div class="module-header">
-                    <div class="card-icon">📝</div>
-                    <div>
-                        <h3>logger/</h3>
-                        <span class="module-badge">Logging Estructurado</span>
+            <div class="section-title">
+                <h2>Módulos Principales</h2>
+                <p>Herramientas diseñadas para ser flexibles, seguras y fáciles de usar.</p>
+            </div>
+
+            <div class="modules-grid">
+                <!-- Logger -->
+                <div class="module-card">
+                    <span class="badge badge-core">Core</span>
+                    <div class="module-icon"><i class="fa-solid fa-terminal"></i></div>
+                    <h3>Logger Estructurado</h3>
+                    <p>Sistema de logging thread-safe con 8 niveles, colores ANSI y salidas múltiples.</p>
+                    <ul class="features-list">
+                        <li><i class="fa-solid fa-check"></i> 8 Niveles (Trace a Panic)</li>
+                        <li><i class="fa-solid fa-check"></i> Campos contextuales</li>
+                        <li><i class="fa-solid fa-check"></i> Temas personalizables</li>
+                    </ul>
+                    <div class="code-preview">
+                        <code>logger.Info("Usuario conectado", "user_id", 123)</code>
                     </div>
                 </div>
-                <p>Sistema de logging thread-safe con 8 niveles, colores ANSI, salidas múltiples y campos contextuales.</p>
-                <div class="module-features">
-                    <div class="feature-item">8 niveles de log (Trace a Panic)</div>
-                    <div class="feature-item">Colores ANSI configurables</div>
-                    <div class="feature-item">Salidas: consola, archivo, multi</div>
-                    <div class="feature-item">Campos contextuales WithFields</div>
-                    <div class="feature-item">Instancia global lista para usar</div>
-                    <div class="feature-item">Thread-safe con mutex</div>
-                </div>
-                <div class="card-code">
-                    <code>
-<span class="keyword">import</span> <span class="string">"gokit/logger"</span><br><br>
-<span class="comment">// Uso rápido</span><br>
-logger.<span class="function">Info</span>(<span class="string">"Aplicación iniciada"</span>)<br>
-logger.<span class="function">Error</span>(<span class="string">"Error crítico"</span>)<br><br>
-<span class="comment">// Con campos contextuales</span><br>
-logger.<span class="function">WithFields</span>(logger.Fields{<br>
-&nbsp;&nbsp;<span class="string">"user_id"</span>: <span class="string">"123"</span>,<br>
-&nbsp;&nbsp;<span class="string">"action"</span>: <span class="string">"login"</span>,<br>
-}).<span class="function">Info</span>(<span class="string">"Usuario autenticado"</span>)
-                    </code>
-                </div>
-                <p style="margin-top: 1rem;"><a href="logger/README_LOGGER.md" style="color: var(--primary);">→ Ver documentación completa del Logger</a></p>
-            </div>
 
-            <!-- Crypto Module -->
-            <div class="module-detail fade-in delay-1">
-                <div class="module-header">
-                    <div class="card-icon">🔐</div>
-                    <div>
-                        <h3>security/crypto/</h3>
-                        <span class="module-badge">Criptografía y Hashing</span>
+                <!-- Crypto -->
+                <div class="module-card">
+                    <span class="badge badge-core">Security</span>
+                    <div class="module-icon"><i class="fa-solid fa-lock"></i></div>
+                    <h3>Criptografía & Hashing</h3>
+                    <p>API dual para hashing (Argon2, Bcrypt) y cifrado AES-GCM. Seguridad lista para usar.</p>
+                    <ul class="features-list">
+                        <li><i class="fa-solid fa-check"></i> 4 Algoritmos de Hash</li>
+                        <li><i class="fa-solid fa-check"></i> Cifrado AES-256-GCM</li>
+                        <li><i class="fa-solid fa-check"></i> Generación segura aleatoria</li>
+                    </ul>
+                    <div class="code-preview">
+                        <code>hash, _ := crypto.HashPassword("secret")</code>
                     </div>
                 </div>
-                <p>Herramientas completas para hashing de contraseñas, cifrado simétrico y generación de datos aleatorios seguros.</p>
-                <div class="module-features">
-                    <div class="feature-item">4 algoritmos de hashing (Argon2id, Bcrypt, Scrypt, PBKDF2)</div>
-                    <div class="feature-item">Cifrado AES-256-GCM</div>
-                    <div class="feature-item">Generación segura de bytes, strings, UUIDs</div>
-                    <div class="feature-item">API keys y códigos OTP</div>
-                    <div class="feature-item">Detección de actualizaciones necesarias</div>
-                    <div class="feature-item">Formato PHC estándar</div>
-                </div>
-                <div class="card-code">
-                    <code>
-<span class="keyword">import</span> <span class="string">"gokit/security/crypto"</span><br><br>
-<span class="comment">// Hashing rápido</span><br>
-hash := crypto.<span class="function">HashPassword</span>(<span class="string">"mi_password"</span>)<br>
-crypto.<span class="function">VerifyPassword</span>(<span class="string">"mi_password"</span>, hash)<br><br>
-<span class="comment">// Algoritmo específico</span><br>
-bcryptHash := crypto.<span class="function">HashWithBcrypt</span>(<span class="string">"pwd"</span>)<br><br>
-<span class="comment">// Cifrado</span><br>
-crypto.<span class="function">SetEncryptionKey</span>(<span class="string">"clave-secreta-32-bytes!!"</span>)<br>
-encrypted := crypto.<span class="function">EncryptString</span>(<span class="string">"datos sensibles"</span>)<br>
-decrypted := crypto.<span class="function">DecryptString</span>(encrypted)
-                    </code>
-                </div>
-                <p style="margin-top: 1rem;"><a href="security/crypto/README_CRYPTO.md" style="color: var(--primary);">→ Ver documentación completa de Crypto</a></p>
-            </div>
 
-            <!-- Token Module -->
-            <div class="module-detail fade-in delay-2">
-                <div class="module-header">
-                    <div class="card-icon">🎫</div>
-                    <div>
-                        <h3>security/token/</h3>
-                        <span class="module-badge">JWT y Sesiones</span>
+                <!-- Token -->
+                <div class="module-card">
+                    <span class="badge badge-core">Security</span>
+                    <div class="module-icon"><i class="fa-solid fa-key"></i></div>
+                    <h3>JWT & Sesiones</h3>
+                    <p>Gestión completa de tokens de acceso/refresco y sesiones con revocación.</p>
+                    <ul class="features-list">
+                        <li><i class="fa-solid fa-check"></i> Access & Refresh Tokens</li>
+                        <li><i class="fa-solid fa-check"></i> Blacklist de sesiones</li>
+                        <li><i class="fa-solid fa-check"></i> Stores en memoria/Redis</li>
+                    </ul>
+                    <div class="code-preview">
+                        <code>token, _ := token.GenerateQuickToken(id, "admin")</code>
                     </div>
                 </div>
-                <p>Gestión completa de tokens JWT (access/refresh) y sistema de sesiones con capacidad de revocación.</p>
-                <div class="module-features">
-                    <div class="feature-item">JWT con access y refresh tokens</div>
-                    <div class="feature-item">Sesiones con revocación</div>
-                    <div class="feature-item">Almacenamiento configurable (memory/Redis)</div>
-                    <div class="feature-item">Niveles de seguridad (Low/Medium/High/Critical)</div>
-                    <div class="feature-item">Extracción rápida de claims</div>
-                    <div class="feature-item">Manager global opcional</div>
-                </div>
-                <div class="card-code">
-                    <code>
-<span class="keyword">import</span> <span class="string">"gokit/security/token"</span><br><br>
-<span class="comment">// Tokens rápidos</span><br>
-tokenStr := token.<span class="function">GenerateQuickToken</span>(<span class="string">"user-123"</span>, <span class="string">"admin"</span>)<br>
-isValid := token.<span class="function">ValidateQuickToken</span>(tokenStr)<br>
-userID := token.<span class="function">ExtractUserID</span>(tokenStr)<br><br>
-<span class="comment">// Configuración avanzada</span><br>
-manager := token.<span class="function">NewJWTManager</span>(config)<br>
-tokens := manager.<span class="function">GenerateTokens</span>(claims)<br><br>
-<span class="comment">// Sesiones</span><br>
-sessionID := token.<span class="function">CreateQuickSession</span>(<span class="string">"user-123"</span>)<br>
-token.<span class="function">RevokeQuickSession</span>(sessionID)
-                    </code>
-                </div>
-                <p style="margin-top: 1rem;"><a href="security/token/README_TOKEN.md" style="color: var(--primary);">→ Ver documentación completa de Token</a></p>
-            </div>
 
-            <!-- Middleware Module -->
-            <div class="module-detail fade-in delay-3">
-                <div class="module-header">
-                    <div class="card-icon">🛡️</div>
-                    <div>
-                        <h3>security/middleware/</h3>
-                        <span class="module-badge">Middlewares HTTP</span>
+                <!-- Middleware -->
+                <div class="module-card">
+                    <span class="badge badge-core">HTTP</span>
+                    <div class="module-icon"><i class="fa-solid fa-layer-group"></i></div>
+                    <h3>Middlewares HTTP</h3>
+                    <p>Auth, CORS, Rate Limiting y Logging para net/http, Gin y Fiber.</p>
+                    <ul class="features-list">
+                        <li><i class="fa-solid fa-check"></i> Compatible multi-framework</li>
+                        <li><i class="fa-solid fa-check"></i> Rate Limiting thread-safe</li>
+                        <li><i class="fa-solid fa-check"></i> Cadena de middlewares</li>
+                    </ul>
+                    <div class="code-preview">
+                        <code>r.Use(middleware.Auth(), middleware.CORS())</code>
                     </div>
                 </div>
-                <p>Middlewares listos para usar con net/http, Gin y Fiber. Autenticación, CORS, logging y rate limiting.</p>
-                <div class="module-features">
-                    <div class="feature-item">Auth middleware con JWT</div>
-                    <div class="feature-item">CORS configurable</div>
-                    <div class="feature-item">Logging de peticiones</div>
-                    <div class="feature-item">Rate limiting thread-safe</div>
-                    <div class="feature-item">Soporte multi-framework</div>
-                    <div class="feature-item">Chain middleware</div>
-                </div>
-                <div class="card-code">
-                    <code>
-<span class="keyword">import</span> <span class="string">"gokit/security/middleware"</span><br><br>
-<span class="comment">// Uso con Gin</span><br>
-r := gin.<span class="function">New</span>()<br>
-r.<span class="function">Use</span>(<br>
-&nbsp;&nbsp;middleware.<span class="function">Logger</span>(),<br>
-&nbsp;&nbsp;middleware.<span class="function">CORS</span>(),<br>
-&nbsp;&nbsp;middleware.<span class="function">Auth</span>(),<br>
-&nbsp;&nbsp;middleware.<span class="function">RateLimit</span>(<span class="number">100</span>),<br>
-)<br><br>
-<span class="comment">// Configuración avanzada</span><br>
-auth := middleware.<span class="function">NewAuthMiddleware</span>(config)<br>
-cors := middleware.<span class="function">NewCORS</span>(corsConfig)
-                    </code>
-                </div>
-                <p style="margin-top: 1rem;"><a href="security/middleware/README_MIDDLEWARE.md" style="color: var(--primary);">→ Ver documentación completa de Middleware</a></p>
-            </div>
 
-            <!-- Audit Module -->
-            <div class="module-detail fade-in delay-4">
-                <div class="module-header">
-                    <div class="card-icon">🔍</div>
-                    <div>
-                        <h3>security/audit/</h3>
-                        <span class="module-badge">Auditoría Forense con IA</span>
+                <!-- Audit (New) -->
+                <div class="module-card" style="border-color: var(--success);">
+                    <span class="badge badge-new">Nuevo • IA</span>
+                    <div class="module-icon" style="color: var(--success); background: rgba(16, 185, 129, 0.1);"><i class="fa-solid fa-shield-halved"></i></div>
+                    <h3>Auditoría Forense</h3>
+                    <p>Sistema completo de auditoría con motor de IA para detectar amenazas en tiempo real.</p>
+                    <ul class="features-list">
+                        <li><i class="fa-solid fa-check"></i> Detección de Fuerza Bruta/SQLi</li>
+                        <li><i class="fa-solid fa-check"></i> Huella digital inmutable</li>
+                        <li><i class="fa-solid fa-check"></i> Exportación JSON/CSV</li>
+                    </ul>
+                    <div class="code-preview">
+                        <code>audit.RecordQuick(event) // IA analiza riesgo</code>
                     </div>
-                </div>
-                <p>Sistema completo de auditoría con recolección de datos forenses y motor de IA para detección de amenazas.</p>
-                <div class="module-features">
-                    <div class="feature-item">Registro detallado con contexto completo</div>
-                    <div class="feature-item">Motor de IA con 8 reglas de detección</div>
-                    <div class="feature-item">Almacenamiento: Memory, SQLite, PostgreSQL</div>
-                    <div class="feature-item">Exportación JSON, CSV, NDJSON</div>
-                    <div class="feature-item">Políticas de retención automáticas</div>
-                    <div class="feature-item">Huella digital inmutable SHA-256</div>
-                </div>
-                <div class="card-code">
-                    <code>
-<span class="keyword">import</span> <span class="string">"gokit/security/audit"</span><br><br>
-<span class="comment">// Inicializar</span><br>
-audit.<span class="function">Init</span>(audit.Config{<br>
-&nbsp;&nbsp;StorageType: <span class="string">"sqlite"</span>,<br>
-&nbsp;&nbsp;EnableIA:    <span class="keyword">true</span>,<br>
-})<br><br>
-<span class="comment">// Registrar evento</span><br>
-event := &audit.Event{<br>
-&nbsp;&nbsp;Actor: audit.ActorInfo{ID: <span class="string">"user-123"</span>},<br>
-&nbsp;&nbsp;Action: audit.ActionInfo{Type: <span class="string">"LOGIN"</span>},<br>
-&nbsp;&nbsp;Context: audit.ContextInfo{<br>
-&nbsp;&nbsp;&nbsp;&nbsp;IPAddress: <span class="string">"192.168.1.100"</span>,<br>
-&nbsp;&nbsp;},<br>
-}<br>
-audit.<span class="function">RecordQuick</span>(event)<br><br>
-<span class="comment">// La IA detecta automáticamente amenazas</span>
-                    </code>
-                </div>
-                <p style="margin-top: 1rem;"><a href="security/audit/README_AUDIT.md" style="color: var(--primary);">→ Ver documentación completa de Auditoría</a></p>
-            </div>
-        </div>
-    </section>
-
-    <!-- Use Cases Section -->
-    <section id="use-cases" class="use-cases">
-        <div class="container">
-            <h2 class="section-title">Casos de Uso Reales</h2>
-            
-            <div class="case-study fade-in">
-                <h3>🏦 Sistema Bancario - Autenticación Segura</h3>
-                <p>Implementación completa de autenticación bancaria con múltiples capas de seguridad.</p>
-                <ul>
-                    <li><strong>Hashing:</strong> Argon2id con parámetros críticos para contraseñas</li>
-                    <li><strong>Tokens:</strong> JWT con refresh tokens rotativos cada 15 minutos</li>
-                    <li><strong>Sesiones:</strong> Revocación inmediata en caso de actividad sospechosa</li>
-                    <li><strong>Auditoría:</strong> Registro forense de cada intento de login con IA</li>
-                    <li><strong>Middleware:</strong> Rate limiting estricto (5 intentos/minuto)</li>
-                </ul>
-                <div class="card-code">
-                    <code>
-<span class="comment">// Registro de usuario</span><br>
-hash := crypto.<span class="function">HashWithArgon2id</span>(password, crypto.CriticalSecurity)<br><br>
-<span class="comment">// Login con auditoría</span><br>
-<span class="keyword">if</span> crypto.<span class="function">VerifyPassword</span>(password, storedHash) {<br>
-&nbsp;&nbsp;audit.<span class="function">RecordQuick</span>(&audit.Event{<br>
-&nbsp;&nbsp;&nbsp;&nbsp;Actor: audit.ActorInfo{ID: userID},<br>
-&nbsp;&nbsp;&nbsp;&nbsp;Action: audit.ActionInfo{Type: <span class="string">"LOGIN_SUCCESS"</span>},<br>
-&nbsp;&nbsp;&nbsp;&nbsp;Context: audit.ContextInfo{IPAddress: ip},<br>
-&nbsp;&nbsp;})<br>
-&nbsp;&nbsp;<span class="keyword">return</span> token.<span class="function">GenerateQuickToken</span>(userID, role)<br>
-} <span class="keyword">else</span> {<br>
-&nbsp;&nbsp;audit.<span class="function">RecordQuick</span>(&audit.Event{<br>
-&nbsp;&nbsp;&nbsp;&nbsp;Action: audit.ActionInfo{Type: <span class="string">"LOGIN_FAILED"</span>},<br>
-&nbsp;&nbsp;&nbsp;&nbsp;Context: audit.ContextInfo{IPAddress: ip},<br>
-&nbsp;&nbsp;})<br>
-}
-                    </code>
-                </div>
-            </div>
-
-            <div class="case-study fade-in delay-1">
-                <h3>🛒 E-commerce - Protección de API</h3>
-                <p>API REST protegida para plataforma de comercio electrónico con miles de usuarios concurrentes.</p>
-                <ul>
-                    <li><strong>Middleware:</strong> Chain de auth + cors + rate limit + logging</li>
-                    <li><strong>Cifrado:</strong> AES-256-GCM para datos de tarjetas de crédito</li>
-                    <li><strong>Sesiones:</strong> Carritos de compra con sesión persistente</li>
-                    <li><strong>Auditoría:</strong> Tracking de cada transacción con metadata completa</li>
-                    <li><strong>IA:</strong> Detección de scraping de precios y bots</li>
-                </ul>
-                <div class="card-code">
-                    <code>
-<span class="comment">// Setup de rutas con middlewares</span><br>
-r := gin.<span class="function">Default</span>()<br>r.<span class="function">Use</span>(middleware.<span class="function">Chain</span>(<br>
-&nbsp;&nbsp;middleware.<span class="function">Logger</span>(),<br>
-&nbsp;&nbsp;middleware.<span class="function">CORS</span>(),<br>
-&nbsp;&nbsp;middleware.<span class="function">RateLimit</span>(<span class="number">100</span>),<br>
-))<br><br>
-<span class="comment">// Ruta protegida</span><br>
-authGroup := r.Group(<span class="string">"/api"</span>)<br>
-authGroup.<span class="function">Use</span>(middleware.<span class="function">Auth</span>())<br>
-{<br>
-&nbsp;&nbsp;authGroup.<span class="function">POST</span>(<span class="string">"/checkout"</span>, checkoutHandler)<br>
-&nbsp;&nbsp;authGroup.<span class="function">GET</span>(<span class="string">"/orders"</span>, getOrdersHandler)<br>
-}
-                    </code>
-                </div>
-            </div>
-
-            <div class="case-study fade-in delay-2">
-                <h3>🏥 Sistema de Salud - Cumplimiento HIPAA/GDPR</h3>
-                <p>Plataforma médica con requisitos estrictos de auditoría y privacidad de datos.</p>
-                <ul>
-                    <li><strong>Auditoría:</strong> Registro inmutable de cada acceso a historiales</li>
-                    <li><strong>Cifrado:</strong> Datos sensibles cifrados en reposo y tránsito</li>
-                    <li><strong>Logger:</strong> Logs estructurados con sanitización de PII</li>
-                    <li><strong>Retención:</strong> Políticas automáticas de 7 años para compliance</li>
-                    <li><strong>Exportación:</strong> Reportes forenses en CSV/NDJSON para auditorías externas</li>
-                </ul>
-                <div class="card-code">
-                    <code>
-<span class="comment">// Acceso a historial médico con auditoría</span><br>
-<span class="keyword">func</span> <span class="function">getMedicalRecord</span>(patientID string) {<br>
-&nbsp;&nbsp;<span class="comment">// Registrar acceso antes de mostrar datos</span><br>
-&nbsp;&nbsp;audit.<span class="function">RecordQuick</span>(&audit.Event{<br>
-&nbsp;&nbsp;&nbsp;&nbsp;Actor: audit.ActorInfo{<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ID: currentUser.ID,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Type: <span class="string">"doctor"</span>,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Email: currentUser.Email,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;},<br>
-&nbsp;&nbsp;&nbsp;&nbsp;Action: audit.ActionInfo{<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Type: <span class="string">"MEDICAL_RECORD_ACCESS"</span>,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Category: <span class="string">"PHI_ACCESS"</span>,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;},<br>
-&nbsp;&nbsp;&nbsp;&nbsp;Resource: audit.ResourceInfo{<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Type: <span class="string">"medical_record"</span>,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ID: patientID,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;},<br>
-&nbsp;&nbsp;&nbsp;&nbsp;Result: audit.ResultInfo{Success: <span class="keyword">true</span>},<br>
-&nbsp;&nbsp;})<br><br>
-&nbsp;&nbsp;<span class="comment">// Retornar datos cifrados</span><br>
-&nbsp;&nbsp;<span class="keyword">return</span> crypto.<span class="function">EncryptString</span>(recordData)<br>
-}
-                    </code>
-                </div>
-            </div>
-
-            <div class="case-study fade-in delay-3">
-                <h3>🎮 Plataforma de Gaming - Anti-Fraud</h3>
-                <p>Detección de trampas, cuentas múltiples y comportamientos fraudulentos en tiempo real.</p>
-                <ul>
-                    <li><strong>IA:</strong> Detección de viajes imposibles (logins desde países diferentes)</li>
-                    <li><strong>Auditoría:</strong> Scoring de riesgo dinámico por jugador</li>
-                    <li><strong>Rate Limiting:</strong> Prevención de automatización y bots</li>
-                    <li><strong>Sesiones:</strong> Múltiples dispositivos con validación cruzada</li>
-                    <li><strong>Logger:</strong> Alertas en tiempo real para el equipo de seguridad</li>
-                </ul>
-                <div class="card-code">
-                    <code>
-<span class="comment">// Detección de viaje imposible</span><br>
-<span class="keyword">func</span> <span class="function">validateLogin</span>(userID, newIP string) {<br>
-&nbsp;&nbsp;<span class="comment">// Obtener último login</span><br>
-&nbsp;&nbsp;lastEvent := audit.<span class="function">QueryQuick</span>(&audit.Query{<br>
-&nbsp;&nbsp;&nbsp;&nbsp;ActorID: userID,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;ActionType: <span class="string">"LOGIN"</span>,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;Limit: <span class="number">1</span>,<br>
-&nbsp;&nbsp;})<br><br>
-&nbsp;&nbsp;<span class="keyword">if</span> lastEvent != <span class="keyword">nil</span> {<br>
-&nbsp;&nbsp;&nbsp;&nbsp;distance := calculateDistance(lastEvent.IP, newIP)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;timeDiff := time.Since(lastEvent.Timestamp)<br><br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment">// Viaje imposible: >1000km en <1 hora</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">if</span> distance > <span class="number">1000</span> && timeDiff < time.Hour {<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;audit.<span class="function">RecordQuick</span>(&audit.Event{<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Action: audit.ActionInfo{Type: <span class="string">"IMPOSSIBLE_TRAVEL"</span>},<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Result: audit.ResultInfo{RiskScore: <span class="number">0.95</span>},<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;})<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">return</span> errors.<span class="function">New</span>(<span class="string">"Actividad sospechosa detectada"</span>)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;}<br>
-&nbsp;&nbsp;}<br>
-}
-                    </code>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Stats Section -->
-    <section id="stats" class="stats">
+    <!-- Features Detail Section -->
+    <section id="caracteristicas" class="features-detail">
         <div class="container">
-            <h2 class="section-title">Estadísticas del Proyecto</h2>
-            <div class="stats-grid">
-                <div class="stat-item fade-in">
-                    <h3>5</h3>
-                    <p>Módulos Principales</p>
+            <div class="section-title">
+                <h2>¿Por qué GoKit?</h2>
+                <p>Diseñado para desarrolladores que valoran la seguridad y la productividad.</p>
+            </div>
+
+            <div class="feature-row">
+                <div class="feature-content">
+                    <h3>API Dual: Rápido vs Configurado</h3>
+                    <p style="color: var(--text-secondary); margin: 1rem 0;">
+                        Comienza con una línea de código usando nuestras funciones globales para prototipado rápido. 
+                        Cuando estés listo para producción, cambia a constructores configurables sin reescribir tu lógica.
+                    </p>
+                    <ul class="features-list">
+                        <li><i class="fa-solid fa-bolt"></i> <strong>Rápido:</strong> <code>crypto.HashPassword("pwd")</code></li>
+                        <li><i class="fa-solid fa-cog"></i> <strong>Configurable:</strong> <code>crypto.NewHasher(customConfig)</code></li>
+                    </ul>
                 </div>
-                <div class="stat-item fade-in delay-1">
-                    <h3>120+</h3>
-                    <p>Tests Unitarios</p>
+                <div class="feature-image">
+                    <i class="fa-solid fa-code-branch"></i>
                 </div>
-                <div class="stat-item fade-in delay-2">
-                    <h3>78%</h3>
-                    <p>Cobertura Promedio</p>
+            </div>
+
+            <div class="feature-row">
+                <div class="feature-content">
+                    <h3>Seguridad por Defecto</h3>
+                    <p style="color: var(--text-secondary); margin: 1rem 0;">
+                        No necesitas ser un experto en criptografía. GoKit elige los parámetros más seguros por defecto 
+                        (Argon2id, AES-256-GCM, Nonces únicos) para proteger tus datos desde el día uno.
+                    </p>
                 </div>
-                <div class="stat-item fade-in delay-3">
-                    <h3>2.5K+</h3>
-                    <p>Líneas de Documentación</p>
+                <div class="feature-image">
+                    <i class="fa-solid fa-user-shield"></i>
                 </div>
-                <div class="stat-item fade-in delay-4">
-                    <h3>8</h3>
-                    <p>Reglas de IA</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Audit Special Section -->
+    <section id="auditoria" class="modules" style="background: linear-gradient(180deg, var(--bg-primary) 0%, #0f2a22 100%);">
+        <div class="container">
+            <div class="section-title">
+                <span class="badge badge-new">Potenciado por IA</span>
+                <h2 style="margin-top: 1rem;">Auditoría Inteligente</h2>
+                <p>Más que logs. Un sistema forense que detecta ataques mientras ocurren.</p>
+            </div>
+
+            <div class="modules-grid" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));">
+                <div class="module-card">
+                    <div class="module-icon"><i class="fa-solid fa-brain"></i></div>
+                    <h4>Detección de Patrones</h4>
+                    <p style="font-size: 0.9rem;">Identifica fuerza bruta, SQL Injection, XSS y scraping automáticamente.</p>
                 </div>
-                <div class="stat-item fade-in delay-1">
-                    <h3>4</h3>
-                    <p>Algoritmos de Hashing</p>
+                <div class="module-card">
+                    <div class="module-icon"><i class="fa-solid fa-plane-departure"></i></div>
+                    <h4>Viajes Imposibles</h4>
+                    <p style="font-size: 0.9rem;">Alerta si un usuario inicia sesión desde países distintos en poco tiempo.</p>
+                </div>
+                <div class="module-card">
+                    <div class="module-icon"><i class="fa-solid fa-fingerprint"></i></div>
+                    <h4>Huella Digital</h4>
+                    <p style="font-size: 0.9rem;">Hash SHA-256 único por evento para garantizar inmutabilidad forense.</p>
+                </div>
+                <div class="module-card">
+                    <div class="module-icon"><i class="fa-solid fa-database"></i></div>
+                    <h4>Multi-Almacenamiento</h4>
+                    <p style="font-size: 0.9rem;">Soporte nativo para Memoria, SQLite (dev) y PostgreSQL (prod).</p>
                 </div>
             </div>
         </div>
@@ -943,134 +694,84 @@ authGroup.<span class="function">Use</span>(middleware.<span class="function">Au
     <!-- Footer -->
     <footer>
         <div class="container">
-            <div class="footer-content">
-                <div class="footer-section">
-                    <h4>GoKit</h4>
-                    <p style="color: #b0b0b0; margin-bottom: 1rem;">
-                        Toolkit de seguridad completo para aplicaciones Go en producción.
+            <div class="footer-grid">
+                <div class="footer-col">
+                    <a href="#" class="logo" style="margin-bottom: 1rem;">
+                        <i class="fa-brands fa-golang"></i> GoKit
+                    </a>
+                    <p style="color: var(--text-secondary); font-size: 0.9rem;">
+                        Toolkit de seguridad y utilidades para Go moderno.
+                        Construido para escalabilidad y seguridad.
                     </p>
-                    <div style="display: flex; gap: 1rem;">
-                        <a href="#" style="font-size: 1.5rem;">📦</a>
-                        <a href="#" style="font-size: 1.5rem;">🐙</a>
-                        <a href="#" style="font-size: 1.5rem;">📄</a>
+                    <div class="author-badge">
+                        <i class="fa-solid fa-code"></i> Developed by <strong>AndresGT</strong>
                     </div>
                 </div>
-
-                <div class="footer-section">
+                
+                <div class="footer-col">
                     <h4>Módulos</h4>
                     <ul>
-                        <li><a href="logger/README_LOGGER.md">Logger</a></li>
-                        <li><a href="security/crypto/README_CRYPTO.md">Crypto</a></li>
-                        <li><a href="security/token/README_TOKEN.md">Token</a></li>
-                        <li><a href="security/middleware/README_MIDDLEWARE.md">Middleware</a></li>
-                        <li><a href="security/audit/README_AUDIT.md">Audit</a></li>
+                        <li><a href="#">Logger</a></li>
+                        <li><a href="#">Crypto</a></li>
+                        <li><a href="#">Token</a></li>
+                        <li><a href="#">Middleware</a></li>
+                        <li><a href="#">Audit IA</a></li>
                     </ul>
                 </div>
 
-                <div class="footer-section">
+                <div class="footer-col">
                     <h4>Recursos</h4>
                     <ul>
-                        <li><a href="docs/README_PRINCIPAL.md">Documentación Principal</a></li>
-                        <li><a href="#">Guía de Inicio</a></li>
+                        <li><a href="#">Documentación</a></li>
                         <li><a href="#">Ejemplos</a></li>
-                        <li><a href="#">Blog</a></li>
-                        <li><a href="#">FAQ</a></li>
+                        <li><a href="#">Guía de Seguridad</a></li>
+                        <li><a href="#">Changelog</a></li>
                     </ul>
                 </div>
 
-                <div class="footer-section">
-                    <h4>Comunidad</h4>
+                <div class="footer-col">
+                    <h4>Legal</h4>
                     <ul>
-                        <li><a href="#">GitHub Issues</a></li>
-                        <li><a href="#">Discord</a></li>
-                        <li><a href="#">Twitter</a></li>
-                        <li><a href="#">Contribuir</a></li>
-                        <li><a href="#">Roadmap</a></li>
+                        <li><a href="#">Licencia MIT</a></li>
+                        <li><a href="#">Privacidad</a></li>
+                        <li><a href="#">Términos</a></li>
                     </ul>
                 </div>
             </div>
 
-            <div class="copyright">
-                <p>&copy; 2024 GoKit. Construido con ❤️ para la comunidad Go.</p>
+            <div class="footer-bottom">
+                <p>&copy; 2024 GoKit by AndresGT. Todos los derechos reservados.</p>
+                <p style="margin-top: 0.5rem; font-size: 0.8rem;">Hecho con <i class="fa-solid fa-heart" style="color: var(--danger);"></i> y Go</p>
             </div>
         </div>
     </footer>
 
     <script>
-        // Smooth scroll para navegación
+        // Smooth scroll para navegadores antiguos
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function (e) {
                 e.preventDefault();
-                const target = document.querySelector(this.getAttribute('href'));
-                if (target) {
-                    target.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'start'
-                    });
-                }
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
             });
         });
 
-        // Animación al hacer scroll
-        const observerOptions = {
-            threshold: 0.1,
-            rootMargin: '0px 0px -50px 0px'
-        };
-
+        // Efecto simple de aparición al hacer scroll
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
-                    entry.target.style.opacity = '1';
+                    entry.target.style.opacity = 1;
                     entry.target.style.transform = 'translateY(0)';
                 }
             });
-        }, observerOptions);
+        }, { threshold: 0.1 });
 
-        document.querySelectorAll('.fade-in').forEach(el => {
-            el.style.opacity = '0';
+        document.querySelectorAll('.module-card, .feature-row').forEach(el => {
+            el.style.opacity = 0;
             el.style.transform = 'translateY(20px)';
-            el.style.transition = 'opacity 0.6s ease-out, transform 0.6s ease-out';
+            el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
             observer.observe(el);
-        });
-
-        // Contador animado para estadísticas
-        function animateCounter(element, target, duration = 2000) {
-            let start = 0;
-            const increment = target / (duration / 16);
-            
-            function updateCounter() {
-                start += increment;
-                if (start < target) {
-                    element.textContent = Math.floor(start) + (element.textContent.includes('+') ? '+' : '') + (element.textContent.includes('%') ? '%' : '');
-                    requestAnimationFrame(updateCounter);
-                } else {
-                    element.textContent = target + (element.dataset.suffix || '');
-                }
-            }
-            
-            updateCounter();
-        }
-
-        // Activar contadores cuando son visibles
-        const statsObserver = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const h3 = entry.target.querySelector('h3');
-                    if (h3 && !h3.classList.contains('counted')) {
-                        const value = parseInt(h3.textContent);
-                        if (!isNaN(value)) {
-                            const suffix = h3.textContent.replace(/[0-9]/g, '');
-                            h3.dataset.suffix = suffix;
-                            animateCounter(h3, value);
-                            h3.classList.add('counted');
-                        }
-                    }
-                }
-            });
-        }, { threshold: 0.5 });
-
-        document.querySelectorAll('.stat-item').forEach(stat => {
-            statsObserver.observe(stat);
         });
     </script>
 </body>
