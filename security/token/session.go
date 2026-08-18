@@ -269,18 +269,18 @@ type SessionManager struct {
 // Ejemplo de uso:
 //
 //	// Con valores predeterminados del nivel de seguridad
-//	manager, err := token.NewSessionManager(token.SessionConfig{
+//	manager := token.NewSessionManager(token.SessionConfig{
 //	    SecurityLevel: security.LevelHigh,
 //	})
 //
 //	// Con configuración personalizada y Redis (ejemplo conceptual)
-//	manager, err := token.NewSessionManager(token.SessionConfig{
+//	manager := token.NewSessionManager(token.SessionConfig{
 //	    SessionTimeout:        8 * time.Hour,
 //	    IdleTimeout:           15 * time.Minute,
 //	    MaxConcurrentSessions: 2,
 //	    Store:                 redisStore, // Implementación personalizada
 //	})
-func NewSessionManager(config SessionConfig) (*SessionManager, error) {
+func NewSessionManager(config SessionConfig) *SessionManager {
 	// Aplicar valores predeterminados del nivel de seguridad
 	defaults := config.SecurityLevel.GetDefaults()
 
@@ -305,7 +305,7 @@ func NewSessionManager(config SessionConfig) (*SessionManager, error) {
 	return &SessionManager{
 		config: config,
 		store:  store,
-	}, nil
+	}
 }
 
 // CreateSession crea una nueva sesión para el usuario especificado.
@@ -335,9 +335,12 @@ type SessionInfo struct {
 	DeviceInfo string
 }
 
+// randomString es inyectable para poder probar el camino de error.
+var randomString = crypto.RandomString
+
 func (m *SessionManager) CreateSession(info SessionInfo) (string, error) {
 	// Generar ID de sesión criptográficamente seguro
-	sessionID, err := crypto.RandomString(32)
+	sessionID, err := randomString(32)
 	if err != nil {
 		return "", ErrSessionStoreFailed
 	}
@@ -572,7 +575,7 @@ var defaultSessionManager *SessionManager
 
 func init() {
 	// Instancia global inicializada por defecto con configuración para desarrollo.
-	defaultSessionManager, _ = NewSessionManager(SessionConfig{
+	defaultSessionManager = NewSessionManager(SessionConfig{
 		SecurityLevel:         security.LevelMedium,
 		MaxConcurrentSessions: 5,
 	})
@@ -587,11 +590,7 @@ func init() {
 //	    MaxConcurrentSessions: 3,
 //	})
 func InitSession(config SessionConfig) error {
-	manager, err := NewSessionManager(config)
-	if err != nil {
-		return err
-	}
-	defaultSessionManager = manager
+	defaultSessionManager = NewSessionManager(config)
 	return nil
 }
 

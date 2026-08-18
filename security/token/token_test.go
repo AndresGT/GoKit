@@ -379,13 +379,10 @@ func TestExtractClaims(t *testing.T) {
 // =============================================================================
 
 func TestNewSessionManager(t *testing.T) {
-	manager, err := NewSessionManager(SessionConfig{
+	manager := NewSessionManager(SessionConfig{
 		SecurityLevel:         security.LevelMedium,
 		MaxConcurrentSessions: 5,
 	})
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
 	if manager == nil {
 		t.Fatal("Expected manager to be created")
 	}
@@ -446,7 +443,7 @@ func TestSession_IsActive(t *testing.T) {
 // =============================================================================
 
 func TestCreateSession(t *testing.T) {
-	manager, _ := NewSessionManager(SessionConfig{
+	manager := NewSessionManager(SessionConfig{
 		SecurityLevel:         security.LevelMedium,
 		MaxConcurrentSessions: 5,
 	})
@@ -466,7 +463,7 @@ func TestCreateSession(t *testing.T) {
 }
 
 func TestValidateSession(t *testing.T) {
-	manager, _ := NewSessionManager(SessionConfig{
+	manager := NewSessionManager(SessionConfig{
 		SecurityLevel:         security.LevelMedium,
 		MaxConcurrentSessions: 5,
 	})
@@ -490,7 +487,7 @@ func TestValidateSession(t *testing.T) {
 }
 
 func TestValidateSession_Expired(t *testing.T) {
-	manager, _ := NewSessionManager(SessionConfig{
+	manager := NewSessionManager(SessionConfig{
 		SessionTimeout: 1 * time.Second,
 		IdleTimeout:    1 * time.Second,
 		Store:          NewMemorySessionStore(),
@@ -514,7 +511,7 @@ func TestValidateSession_Expired(t *testing.T) {
 // =============================================================================
 
 func TestRevokeSession(t *testing.T) {
-	manager, _ := NewSessionManager(SessionConfig{
+	manager := NewSessionManager(SessionConfig{
 		SecurityLevel: security.LevelMedium,
 	})
 
@@ -539,7 +536,7 @@ func TestRevokeSession(t *testing.T) {
 }
 
 func TestRevokeAllUserSessions(t *testing.T) {
-	manager, _ := NewSessionManager(SessionConfig{
+	manager := NewSessionManager(SessionConfig{
 		SecurityLevel:         security.LevelMedium,
 		MaxConcurrentSessions: 10,
 	})
@@ -574,7 +571,7 @@ func TestRevokeAllUserSessions(t *testing.T) {
 // =============================================================================
 
 func TestConcurrentSessionLimit(t *testing.T) {
-	manager, _ := NewSessionManager(SessionConfig{
+	manager := NewSessionManager(SessionConfig{
 		SessionTimeout:        1 * time.Hour,
 		MaxConcurrentSessions: 2,
 		Store:                 NewMemorySessionStore(),

@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
@@ -79,7 +80,7 @@ func NewArgon2Hasher(cfg HasherConfig) (*Argon2Hasher, error) {
 func (h *Argon2Hasher) Hash(password string) (string, error) {
 	// Generar salt criptográficamente seguro
 	salt := make([]byte, h.saltLength)
-	if _, err := rand.Read(salt); err != nil {
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
 		return "", err
 	}
 

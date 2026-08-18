@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"strings"
 
 	"golang.org/x/crypto/pbkdf2"
@@ -71,7 +72,7 @@ func NewPBKDF2Hasher(cfg HasherConfig) (*PBKDF2Hasher, error) {
 func (h *PBKDF2Hasher) Hash(password string) (string, error) {
 	// Generar salt criptográficamente seguro
 	salt := make([]byte, h.saltLen)
-	if _, err := rand.Read(salt); err != nil {
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
 		return "", err
 	}
 

@@ -89,26 +89,29 @@ func buildRegisterOptions(opts []RegisterOption) RegisterOptions {
 // logRouteRegistered deja constancia en el logger global de GoKit de un
 // endpoint registrado al arrancar la aplicación.
 func logRouteRegistered(method, path string, protected, authApplied bool, groupName string) {
-	fields := map[string]interface{}{
-		"method":    method,
-		"path":      path,
-		"protected": protected,
-	}
-	if groupName != "" {
-		fields["group"] = groupName
-	}
-
 	icon := "🔓"
+	authStatus := "pública"
+
 	if protected {
 		icon = "🔒"
 		if authApplied {
-			fields["auth"] = "aplicado"
+			authStatus = "protegida (middleware activo)"
 		} else {
-			fields["auth"] = "solo informativo"
+			authStatus = "protegida (requiere auth)"
 		}
 	}
 
-	logger.InfoWithFields(fmt.Sprintf("%s ruta registrada", icon), fields)
+	// Construcción estructurada y ordenada
+	msg := fmt.Sprintf("%s [%-6s] %-35s | grupo: %-12s | estado: %s",
+		icon,
+		method,
+		path,
+		groupName,
+		authStatus,
+	)
+
+	// Usar Debug en lugar de Info para no saturar los logs de producción
+	logger.Debug(msg)
 }
 
 // =============================================================================
@@ -130,6 +133,8 @@ func logRouteRegistered(method, path string, protected, authApplied bool, groupN
 //	    {Method: "POST", Path: "/signup", Handler: handler.SignUp, Protected: false},
 //	    {Method: "POST", Path: "/signin", Handler: handler.SignIn, Protected: false},
 //	}, middleware.WithGroupName("auth"))
+//
+// RegisterGinRoutes
 func RegisterGinRoutes(group *gin.RouterGroup, routes []Route[gin.HandlerFunc], opts ...RegisterOption) {
 	options := buildRegisterOptions(opts)
 
@@ -144,7 +149,10 @@ func RegisterGinRoutes(group *gin.RouterGroup, routes []Route[gin.HandlerFunc], 
 		handlers = append(handlers, route.Handler)
 
 		group.Handle(route.Method, route.Path, handlers...)
-		logRouteRegistered(route.Method, group.BasePath()+route.Path, route.Protected, authApplied, options.GroupName)
+
+		// Normalización de la ruta para evitar //
+		fullPath := strings.ReplaceAll(group.BasePath()+"/"+route.Path, "//", "/")
+		logRouteRegistered(route.Method, fullPath, route.Protected, authApplied, options.GroupName)
 	}
 }
 

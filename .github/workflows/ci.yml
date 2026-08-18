@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Build, Vet y Tests con cobertura 100%
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Tidy check
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Tests con race detector
+        run: go test -race -count=1 ./...
+
+      - name: Cobertura 100% por paquete
+        run: |
+          set -euo pipefail
+          pkgs=(./logger ./security/crypto ./security/token ./security/middleware ./security/audit)
+          for pkg in "${pkgs[@]}"; do
+            cov=$(go test -covermode=atomic -coverprofile=/tmp/cover.out "$pkg" 2>/dev/null | grep -oP 'coverage: \K[0-9.]+(?=%)' || echo 0)
+            echo "$pkg -> $cov%"
+            ok=$(awk -v c="$cov" 'BEGIN { exit !(c >= 99.99) }' && echo yes || echo no)
+            if [ "$ok" != "yes" ]; then
+              echo "ERROR: $pkg está por debajo del 100% de cobertura"
+              exit 1
+            fi
+          done

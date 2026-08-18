@@ -8,26 +8,35 @@ import (
 	"io"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 // SQLiteConfig configura la conexión a SQLite
 type SQLiteConfig struct {
-	DSN          string `json:"dsn"`           // Path al archivo SQLite
+	DSN          string `json:"dsn"`           // Path al archivo SQLite (o ":memory:")
 	MaxOpenConns int    `json:"max_open_conns"` // Máximas conexiones abiertas
 	MaxIdleConns int    `json:"max_idle_conns"` // Máximas conexiones idle
 	MaxLifetime  int    `json:"max_lifetime"`   // Máximo tiempo de vida de conexión (segundos)
 }
 
-// SQLiteStorage implementa Storage usando SQLite
+// SQLiteStorage implementa Storage usando SQLite (driver modernc.org/sqlite, sin CGO)
 type SQLiteStorage struct {
 	db     *sql.DB
 	config SQLiteConfig
 }
 
+var (
+	sqliteDriverName  = "sqlite"
+	sqliteCreateTables = createTables
+)
+
 // NewSQLiteStorage crea un nuevo storage SQLite
 func NewSQLiteStorage(config SQLiteConfig) (*SQLiteStorage, error) {
-	db, err := sql.Open("sqlite3", config.DSN)
+	if config.DSN == "" {
+		config.DSN = ":memory:"
+	}
+
+	db, err := sql.Open(sqliteDriverName, config.DSN)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open sqlite database: %w", err)
 	}
@@ -43,8 +52,18 @@ func NewSQLiteStorage(config SQLiteConfig) (*SQLiteStorage, error) {
 		db.SetConnMaxLifetime(time.Duration(config.MaxLifetime) * time.Second)
 	}
 
-	// Crear tablas
-	if err := createTables(db); err != nil {
+	// SQLite en memoria requiere una única conexión para que el DB persista
+	if config.DSN == ":memory:" {
+		db.SetMaxOpenConns(1)
+		db.SetMaxIdleConns(1)
+	}
+
+	// Verificar la conexión y crear tablas
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to ping sqlite database: %w", err)
+	}
+	if err := sqliteCreateTables(db); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to create tables: %w", err)
 	}
@@ -119,7 +138,7 @@ func (s *SQLiteStorage) Save(ctx context.Context, event *Event) error {
 
 	_, err := s.db.ExecContext(ctx, query,
 		event.ID,
-		event.Timestamp,
+		event.Timestamp.UTC(),
 		event.Actor.ID,
 		event.Actor.Email,
 		event.Actor.Username,
@@ -151,7 +170,7 @@ func (s *SQLiteStorage) Save(ctx context.Context, event *Event) error {
 	return err
 }
 
-// SaveBatch guarda múltiples eventos
+// SaveBatch guarda múltiples eventos de forma atómica
 func (s *SQLiteStorage) SaveBatch(ctx context.Context, events []*Event) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -159,8 +178,55 @@ func (s *SQLiteStorage) SaveBatch(ctx context.Context, events []*Event) error {
 	}
 	defer tx.Rollback()
 
+	stmt, err := tx.PrepareContext(ctx, `
+	INSERT OR REPLACE INTO audit_events (
+		id, timestamp, actor_id, actor_email, actor_username, actor_role,
+		actor_session_id, actor_type, action_type, action_category, action_description,
+		action_method, action_path, resource_type, resource_id, resource_name,
+		result_status, result_status_code, result_message, result_error, result_duration_ms,
+		context_ip_address, context_user_agent, context_request_id, risk_score,
+		threats, metadata, digital_fingerprint
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
 	for _, event := range events {
-		if err := s.Save(ctx, event); err != nil {
+		threatsJSON, _ := json.Marshal(event.Threats)
+		metadataJSON, _ := json.Marshal(event.Metadata)
+
+		if _, err := stmt.ExecContext(ctx,
+			event.ID,
+			event.Timestamp.UTC(),
+			event.Actor.ID,
+			event.Actor.Email,
+			event.Actor.Username,
+			event.Actor.Role,
+			event.Actor.SessionID,
+			event.Actor.Type,
+			event.Action.Type,
+			event.Action.Category,
+			event.Action.Description,
+			event.Action.Method,
+			event.Action.Path,
+			event.Resource.Type,
+			event.Resource.ID,
+			event.Resource.Name,
+			event.Result.Status,
+			event.Result.StatusCode,
+			event.Result.Message,
+			event.Result.Error,
+			event.Result.Duration,
+			event.Context.IPAddress,
+			event.Context.UserAgent,
+			event.Context.RequestID,
+			event.RiskScore,
+			string(threatsJSON),
+			string(metadataJSON),
+			event.DigitalFingerprint,
+		); err != nil {
 			return err
 		}
 	}
@@ -168,10 +234,19 @@ func (s *SQLiteStorage) SaveBatch(ctx context.Context, events []*Event) error {
 	return tx.Commit()
 }
 
+// auditColumns es la lista explícita de columnas (sin created_at) para que
+// scanEvent/scanEventRow puedan leer la fila completa.
+const auditColumns = "id, timestamp, actor_id, actor_email, actor_username, actor_role, " +
+	"actor_session_id, actor_type, action_type, action_category, action_description, " +
+	"action_method, action_path, resource_type, resource_id, resource_name, " +
+	"result_status, result_status_code, result_message, result_error, result_duration_ms, " +
+	"context_ip_address, context_user_agent, context_request_id, risk_score, " +
+	"threats, metadata, digital_fingerprint"
+
 // GetByID obtiene un evento por su ID
 func (s *SQLiteStorage) GetByID(ctx context.Context, id string) (*Event, error) {
-	query := `SELECT * FROM audit_events WHERE id = ?`
-	
+	query := `SELECT ` + auditColumns + ` FROM audit_events WHERE id = ?`
+
 	row := s.db.QueryRowContext(ctx, query, id)
 	return scanEvent(row)
 }
@@ -179,7 +254,7 @@ func (s *SQLiteStorage) GetByID(ctx context.Context, id string) (*Event, error) 
 // Query consulta eventos con filtros
 func (s *SQLiteStorage) Query(ctx context.Context, filter QueryFilter) ([]*Event, error) {
 	query, args := buildQuery(filter)
-	
+
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -201,7 +276,7 @@ func (s *SQLiteStorage) Query(ctx context.Context, filter QueryFilter) ([]*Event
 // Count cuenta eventos que coinciden con los filtros
 func (s *SQLiteStorage) Count(ctx context.Context, filter QueryFilter) (int64, error) {
 	query, args := buildCountQuery(filter)
-	
+
 	var count int64
 	err := s.db.QueryRowContext(ctx, query, args...).Scan(&count)
 	return count, err
@@ -210,8 +285,8 @@ func (s *SQLiteStorage) Count(ctx context.Context, filter QueryFilter) (int64, e
 // DeleteOlderThan elimina eventos anteriores a una fecha
 func (s *SQLiteStorage) DeleteOlderThan(ctx context.Context, timestamp time.Time) (int64, error) {
 	query := `DELETE FROM audit_events WHERE timestamp < ?`
-	
-	result, err := s.db.ExecContext(ctx, query, timestamp)
+
+	result, err := s.db.ExecContext(ctx, query, timestamp.UTC())
 	if err != nil {
 		return 0, err
 	}
@@ -236,7 +311,6 @@ func (s *SQLiteStorage) Export(ctx context.Context, filter QueryFilter, format E
 	default:
 		return fmt.Errorf("unsupported export format: %s", format)
 	}
-
 }
 
 // Close cierra la conexión a la base de datos
@@ -248,9 +322,9 @@ func (s *SQLiteStorage) Close() error {
 
 func scanEvent(row scanner) (*Event, error) {
 	event := &Event{}
-	
+
 	var threatsJSON, metadataJSON []byte
-	
+
 	err := row.Scan(
 		&event.ID,
 		&event.Timestamp,
@@ -281,7 +355,7 @@ func scanEvent(row scanner) (*Event, error) {
 		&metadataJSON,
 		&event.DigitalFingerprint,
 	)
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -298,9 +372,9 @@ func scanEvent(row scanner) (*Event, error) {
 
 func scanEventRow(rows *sql.Rows) (*Event, error) {
 	event := &Event{}
-	
+
 	var threatsJSON, metadataJSON []byte
-	
+
 	err := rows.Scan(
 		&event.ID,
 		&event.Timestamp,
@@ -331,7 +405,7 @@ func scanEventRow(rows *sql.Rows) (*Event, error) {
 		&metadataJSON,
 		&event.DigitalFingerprint,
 	)
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -346,8 +420,129 @@ func scanEventRow(rows *sql.Rows) (*Event, error) {
 	return event, nil
 }
 
+// sortColumns lista blanca de columnas permitidas para ORDER BY
+var sortColumns = map[string]bool{
+	"timestamp": true,
+	"risk_score": true,
+	"actor_id": true,
+	"action_type": true,
+}
+
 func buildQuery(filter QueryFilter) (string, []interface{}) {
-	query := `SELECT * FROM audit_events WHERE 1=1`
+	query := `SELECT ` + auditColumns + ` FROM audit_events WHERE 1=1`
+	var args []interface{}
+
+	if len(filter.EventIDs) > 0 {
+		query += ` AND id IN (?` + repeatPlaceholder(len(filter.EventIDs)-1) + `)`
+		for _, id := range filter.EventIDs {
+			args = append(args, id)
+		}
+	}
+
+	if len(filter.ActorIDs) > 0 {
+		query += ` AND actor_id IN (?` + repeatPlaceholder(len(filter.ActorIDs)-1) + `)`
+		for _, id := range filter.ActorIDs {
+			args = append(args, id)
+		}
+	}
+
+	if len(filter.ActorTypes) > 0 {
+		query += ` AND actor_type IN (?` + repeatPlaceholder(len(filter.ActorTypes)-1) + `)`
+		for _, t := range filter.ActorTypes {
+			args = append(args, t)
+		}
+	}
+
+	if len(filter.ActionTypes) > 0 {
+		query += ` AND action_type IN (?` + repeatPlaceholder(len(filter.ActionTypes)-1) + `)`
+		for _, actionType := range filter.ActionTypes {
+			args = append(args, actionType)
+		}
+	}
+
+	if len(filter.ActionCategories) > 0 {
+		query += ` AND action_category IN (?` + repeatPlaceholder(len(filter.ActionCategories)-1) + `)`
+		for _, c := range filter.ActionCategories {
+			args = append(args, c)
+		}
+	}
+
+	if len(filter.ResourceTypes) > 0 {
+		query += ` AND resource_type IN (?` + repeatPlaceholder(len(filter.ResourceTypes)-1) + `)`
+		for _, t := range filter.ResourceTypes {
+			args = append(args, t)
+		}
+	}
+
+	if len(filter.ResourceIDs) > 0 {
+		query += ` AND resource_id IN (?` + repeatPlaceholder(len(filter.ResourceIDs)-1) + `)`
+		for _, id := range filter.ResourceIDs {
+			args = append(args, id)
+		}
+	}
+
+	if len(filter.Statuses) > 0 {
+		query += ` AND result_status IN (?` + repeatPlaceholder(len(filter.Statuses)-1) + `)`
+		for _, s := range filter.Statuses {
+			args = append(args, s)
+		}
+	}
+
+	if len(filter.IPAddresses) > 0 {
+		query += ` AND context_ip_address IN (?` + repeatPlaceholder(len(filter.IPAddresses)-1) + `)`
+		for _, ip := range filter.IPAddresses {
+			args = append(args, ip)
+		}
+	}
+
+	if len(filter.SessionIDs) > 0 {
+		query += ` AND actor_session_id IN (?` + repeatPlaceholder(len(filter.SessionIDs)-1) + `)`
+		for _, s := range filter.SessionIDs {
+			args = append(args, s)
+		}
+	}
+
+	if !filter.StartTime.IsZero() {
+		query += ` AND timestamp >= ?`
+		args = append(args, filter.StartTime.UTC())
+	}
+
+	if !filter.EndTime.IsZero() {
+		query += ` AND timestamp <= ?`
+		args = append(args, filter.EndTime.UTC())
+	}
+
+	if filter.MinRiskScore > 0 {
+		query += ` AND risk_score >= ?`
+		args = append(args, filter.MinRiskScore)
+	}
+
+	if filter.SearchQuery != "" {
+		query += ` AND (actor_id LIKE ? OR actor_email LIKE ? OR actor_username LIKE ? OR
+			action_type LIKE ? OR action_category LIKE ? OR resource_type LIKE ? OR
+			resource_id LIKE ? OR result_message LIKE ? OR context_ip_address LIKE ?)`
+		like := "%" + filter.SearchQuery + "%"
+		args = append(args, like, like, like, like, like, like, like, like, like)
+	}
+
+	// Orden y paginación con lista blanca para evitar inyección SQL
+	sortBy := filter.SortBy
+	if !sortColumns[sortBy] {
+		sortBy = "timestamp"
+	}
+	sortOrder := filter.SortOrder
+	if sortOrder != "asc" && sortOrder != "desc" {
+		sortOrder = "desc"
+	}
+	query += ` ORDER BY ` + sortBy + ` ` + sortOrder
+	query += ` LIMIT ? OFFSET ?`
+	args = append(args, filter.Limit, filter.Offset)
+
+	return query, args
+}
+
+func buildCountQuery(filter QueryFilter) (string, []interface{}) {
+	query := `SELECT COUNT(*) FROM audit_events WHERE 1=1`
 	var args []interface{}
 
 	if len(filter.EventIDs) > 0 {
@@ -373,53 +568,17 @@ func buildQuery(filter QueryFilter) (string, []interface{}) {
 
 	if !filter.StartTime.IsZero() {
 		query += ` AND timestamp >= ?`
-		args = append(args, filter.StartTime)
+		args = append(args, filter.StartTime.UTC())
 	}
 
 	if !filter.EndTime.IsZero() {
 		query += ` AND timestamp <= ?`
-		args = append(args, filter.EndTime)
+		args = append(args, filter.EndTime.UTC())
 	}
 
 	if filter.MinRiskScore > 0 {
 		query += ` AND risk_score >= ?`
 		args = append(args, filter.MinRiskScore)
-	}
-
-	query += ` ORDER BY ` + filter.SortBy + ` ` + filter.SortOrder
-	query += ` LIMIT ? OFFSET ?`
-	args = append(args, filter.Limit, filter.Offset)
-
-	return query, args
-}
-
-func buildCountQuery(filter QueryFilter) (string, []interface{}) {
-	query := `SELECT COUNT(*) FROM audit_events WHERE 1=1`
-	var args []interface{}
-
-	// Mismos filtros que buildQuery pero sin ORDER BY ni LIMIT
-	if len(filter.EventIDs) > 0 {
-		query += ` AND id IN (?` + repeatPlaceholder(len(filter.EventIDs)-1) + `)`
-		for _, id := range filter.EventIDs {
-			args = append(args, id)
-		}
-	}
-
-	if len(filter.ActorIDs) > 0 {
-		query += ` AND actor_id IN (?` + repeatPlaceholder(len(filter.ActorIDs)-1) + `)`
-		for _, id := range filter.ActorIDs {
-			args = append(args, id)
-		}
-	}
-
-	if !filter.StartTime.IsZero() {
-		query += ` AND timestamp >= ?`
-		args = append(args, filter.StartTime)
-	}
-
-	if !filter.EndTime.IsZero() {
-		query += ` AND timestamp <= ?`
-		args = append(args, filter.EndTime)
 	}
 
 	return query, args

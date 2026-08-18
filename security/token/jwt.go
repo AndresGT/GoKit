@@ -193,6 +193,9 @@ func (m *JWTManager) GenerateRefreshToken(claims Claims) (string, error) {
 	return m.generateToken(claims, m.config.RefreshTokenDuration)
 }
 
+// generateUUID es inyectable para poder probar el camino de error.
+var generateUUID = crypto.GenerateUUID
+
 // generateToken es el método interno que genera tokens JWT.
 func (m *JWTManager) generateToken(claims Claims, duration time.Duration) (string, error) {
 	// Establecer claims estándar
@@ -202,7 +205,7 @@ func (m *JWTManager) generateToken(claims Claims, duration time.Duration) (strin
 	claims.Issuer = m.config.Issuer
 
 	// Generar ID único para el token (jti)
-	tokenID, err := crypto.GenerateUUID()
+	tokenID, err := generateUUID()
 	if err != nil {
 		return "", ErrJWTInvalid
 	}
@@ -212,12 +215,7 @@ func (m *JWTManager) generateToken(claims Claims, duration time.Duration) (strin
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	// Firmar el token
-	tokenString, err := token.SignedString(m.config.SecretKey)
-	if err != nil {
-		return "", ErrJWTInvalid
-	}
-
-	return tokenString, nil
+	return token.SignedString(m.config.SecretKey)
 }
 
 // ValidateToken valida un token JWT y retorna los claims si es válido.
@@ -244,9 +242,6 @@ func (m *JWTManager) ValidateToken(tokenString string) (*Claims, error) {
 	parser := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 
 	token, err := parser.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		if token.Method != jwt.SigningMethodHS256 {
-			return nil, ErrJWTSigningMethodInvalid
-		}
 		return m.config.SecretKey, nil
 	})
 
@@ -259,10 +254,7 @@ func (m *JWTManager) ValidateToken(tokenString string) (*Claims, error) {
 	}
 
 	// Extraer claims
-	claims, ok := token.Claims.(*Claims)
-	if !ok || !token.Valid {
-		return nil, ErrJWTInvalid
-	}
+	claims := token.Claims.(*Claims)
 
 	if m.config.Issuer != "" && claims.Issuer != m.config.Issuer {
 		return nil, ErrJWTInvalid

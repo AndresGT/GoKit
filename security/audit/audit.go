@@ -4,18 +4,16 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/AndresGT/GoKit/logger"
+	"github.com/AndresGT/GoKit/security/crypto"
 )
 
 // Event representa un evento de auditoría completo con todos los metadatos necesarios
@@ -201,17 +199,20 @@ type Config struct {
 
 // Auditor es la estructura principal del sistema de auditoría
 type Auditor struct {
-	config       Config
-	storage      Storage
-	iaEngine     *IAEngine
-	logger       logger.Logger
-	asyncChan    chan *Event
-	wg           sync.WaitGroup
-	ctx          context.Context
-	cancel       context.CancelFunc
-	mu           sync.RWMutex
-	closed       bool
-	stats        Stats
+	config    Config
+	storage   Storage
+	iaEngine  *IAEngine
+	logger    *logger.Logger
+	asyncChan chan *Event
+	wg        sync.WaitGroup
+	ctx       context.Context
+	cancel    context.CancelFunc
+	mu        sync.RWMutex
+	closed    atomic.Bool
+	stats     Stats
+	startedAt time.Time
+	totalRisk float64
+	riskCount int64
 }
 
 // Stats contiene estadísticas del sistema de auditoría
@@ -222,17 +223,18 @@ type Stats struct {
 	ThreatsDetected  int64     `json:"threats_detected"`
 	AverageRiskScore float64   `json:"average_risk_score"`
 	LastEventTime    time.Time `json:"last_event_time"`
-	StorageSize      int64     `json:"storage_size_bytes"`
 	Uptime           time.Duration `json:"uptime"`
 }
 
 // IAEngine es el motor de inteligencia artificial para detección de amenazas
 type IAEngine struct {
 	mu                sync.RWMutex
+	profileMu         sync.RWMutex
 	rules             []DetectionRule
 	anomalyDetector   *AnomalyDetector
 	behaviorProfiles  map[string]*BehaviorProfile
 	ipReputation      *IPReputationDB
+	history           EventQuerier
 	enabled           bool
 	minRiskThreshold  float64
 	stats             IAStats
@@ -360,13 +362,11 @@ func NewAuditor(config Config) (*Auditor, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	
 	auditor := &Auditor{
-		config: config,
-		logger: logger.GetDefault(),
-		ctx:    ctx,
-		cancel: cancel,
-		stats: Stats{
-			Uptime: time.Since(time.Now()),
-		},
+		config:    config,
+		logger:    logger.GetDefault(),
+		ctx:       ctx,
+		cancel:    cancel,
+		startedAt: time.Now(),
 	}
 
 	// Inicializar storage
@@ -379,7 +379,7 @@ func NewAuditor(config Config) (*Auditor, error) {
 
 	// Inicializar motor de IA si está habilitado
 	if config.EnableIA {
-		auditor.iaEngine = NewIAEngine(config.IAMinRiskThreshold)
+		auditor.iaEngine = NewIAEngine(config.IAMinRiskThreshold, auditor.storage.Query)
 		auditor.iaEngine.LoadDefaultRules()
 	}
 
@@ -394,11 +394,11 @@ func NewAuditor(config Config) (*Auditor, error) {
 		go auditor.asyncProcessor()
 	}
 
-	auditor.logger.Info("Audit system initialized",
-		"storage_type", config.StorageType,
-		"ia_enabled", config.EnableIA,
-		"async_enabled", config.EnableAsync,
-	)
+	auditor.logger.InfoWithFields("Audit system initialized", map[string]interface{}{
+		"storage_type": config.StorageType,
+		"ia_enabled":   config.EnableIA,
+		"async_enabled": config.EnableAsync,
+	})
 
 	return auditor, nil
 }
@@ -453,7 +453,7 @@ func createStorage(storageType string, config interface{}) (Storage, error) {
 
 // Record registra un evento de auditoría (síncrono)
 func (a *Auditor) Record(event *Event) error {
-	if a.closed {
+	if a.closed.Load() {
 		return fmt.Errorf("auditor is closed")
 	}
 
@@ -484,19 +484,21 @@ func (a *Auditor) Record(event *Event) error {
 	a.mu.Lock()
 	a.stats.TotalEvents++
 	a.stats.LastEventTime = event.Timestamp
+	a.totalRisk += event.RiskScore
+	a.riskCount++
 	a.mu.Unlock()
 
 	// Loggear si hay amenazas de alta severidad
 	if len(event.Threats) > 0 {
 		for _, threat := range event.Threats {
 			if threat.Severity == "HIGH" || threat.Severity == "CRITICAL" {
-				a.logger.Warn("Security threat detected",
-					"threat_type", threat.Type,
-					"severity", threat.Severity,
-					"actor_id", event.Actor.ID,
-					"ip_address", event.Context.IPAddress,
-					"confidence", threat.Confidence,
-				)
+				a.logger.WarnWithFields("Security threat detected", map[string]interface{}{
+					"threat_type": threat.Type,
+					"severity":    threat.Severity,
+					"actor_id":    event.Actor.ID,
+					"ip_address":  event.Context.IPAddress,
+					"confidence":  threat.Confidence,
+				})
 			}
 		}
 	}
@@ -506,7 +508,7 @@ func (a *Auditor) Record(event *Event) error {
 
 // RecordAsync registra un evento de auditoría de forma asíncrona
 func (a *Auditor) RecordAsync(event *Event) error {
-	if a.closed {
+	if a.closed.Load() {
 		return fmt.Errorf("auditor is closed")
 	}
 
@@ -530,20 +532,20 @@ func (a *Auditor) asyncProcessor() {
 		select {
 		case event := <-a.asyncChan:
 			if err := a.Record(event); err != nil {
-				a.logger.Error("Failed to process async audit event",
-					"error", err,
-					"event_id", event.ID,
-				)
+				a.logger.ErrorWithFields("Failed to process async audit event", map[string]interface{}{
+					"error":    err,
+					"event_id": event.ID,
+				})
 			}
 		case <-a.ctx.Done():
 			// Drenar canal antes de cerrar
 			for len(a.asyncChan) > 0 {
 				event := <-a.asyncChan
 				if err := a.Record(event); err != nil {
-					a.logger.Error("Failed to drain async audit event",
-						"error", err,
-						"event_id", event.ID,
-					)
+					a.logger.ErrorWithFields("Failed to drain async audit event", map[string]interface{}{
+						"error":    err,
+						"event_id": event.ID,
+					})
 				}
 			}
 			return
@@ -554,7 +556,11 @@ func (a *Auditor) asyncProcessor() {
 // enrichEvent completa campos faltantes del evento
 func (a *Auditor) enrichEvent(event *Event) {
 	if event.ID == "" {
-		event.ID = generateUUID()
+		if id, err := uuidGenerator(); err == nil {
+			event.ID = id
+		} else {
+			event.ID = fmt.Sprintf("evt-%d", time.Now().UnixNano())
+		}
 	}
 
 	if event.Timestamp.IsZero() {
@@ -620,7 +626,7 @@ func (a *Auditor) calculateFingerprint(event *Event) string {
 
 // Query consulta eventos de auditoría con filtros
 func (a *Auditor) Query(ctx context.Context, filter QueryFilter) ([]*Event, error) {
-	if a.closed {
+	if a.closed.Load() {
 		return nil, fmt.Errorf("auditor is closed")
 	}
 
@@ -643,7 +649,7 @@ func (a *Auditor) Query(ctx context.Context, filter QueryFilter) ([]*Event, erro
 
 // GetByID obtiene un evento por su ID
 func (a *Auditor) GetByID(ctx context.Context, id string) (*Event, error) {
-	if a.closed {
+	if a.closed.Load() {
 		return nil, fmt.Errorf("auditor is closed")
 	}
 	return a.storage.GetByID(ctx, id)
@@ -651,7 +657,7 @@ func (a *Auditor) GetByID(ctx context.Context, id string) (*Event, error) {
 
 // Count cuenta eventos que coinciden con los filtros
 func (a *Auditor) Count(ctx context.Context, filter QueryFilter) (int64, error) {
-	if a.closed {
+	if a.closed.Load() {
 		return 0, fmt.Errorf("auditor is closed")
 	}
 	return a.storage.Count(ctx, filter)
@@ -659,7 +665,7 @@ func (a *Auditor) Count(ctx context.Context, filter QueryFilter) (int64, error) 
 
 // Export exporta eventos a un formato específico
 func (a *Auditor) Export(ctx context.Context, filter QueryFilter, format ExportFormat, writer io.Writer) error {
-	if a.closed {
+	if a.closed.Load() {
 		return fmt.Errorf("auditor is closed")
 	}
 	return a.storage.Export(ctx, filter, format, writer)
@@ -668,19 +674,35 @@ func (a *Auditor) Export(ctx context.Context, filter QueryFilter, format ExportF
 // GetStats retorna estadísticas del sistema de auditoría
 func (a *Auditor) GetStats() Stats {
 	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return a.stats
+	stats := a.stats
+	avgRisk := 0.0
+	if a.riskCount > 0 {
+		avgRisk = a.totalRisk / float64(a.riskCount)
+	}
+	startedAt := a.startedAt
+	a.mu.RUnlock()
+
+	stats.AverageRiskScore = avgRisk
+	stats.Uptime = time.Since(startedAt)
+
+	now := time.Now()
+	if a.storage != nil {
+		if n, err := a.storage.Count(a.ctx, QueryFilter{StartTime: now.Add(-time.Hour)}); err == nil {
+			stats.EventsLastHour = n
+		}
+		if n, err := a.storage.Count(a.ctx, QueryFilter{StartTime: now.Add(-24 * time.Hour)}); err == nil {
+			stats.EventsLastDay = n
+		}
+	}
+
+	return stats
 }
 
 // Close cierra el sistema de auditoría
 func (a *Auditor) Close() error {
-	a.mu.Lock()
-	if a.closed {
-		a.mu.Unlock()
+	if a.closed.Swap(true) {
 		return nil
 	}
-	a.closed = true
-	a.mu.Unlock()
 
 	// Cancelar contexto
 	a.cancel()
@@ -698,9 +720,16 @@ func (a *Auditor) Close() error {
 	return nil
 }
 
+// retentionCheckInterval es el intervalo entre ejecuciones de mantenimiento.
+// Es atómico para permitir su reemplazo en pruebas sin carreras con la goroutine.
+var retentionCheckInterval = func() (v atomic.Int64) {
+	v.Store(int64(24 * time.Hour))
+	return
+}()
+
 // retentionMaintenance ejecuta mantenimiento de políticas de retención
 func (a *Auditor) retentionMaintenance() {
-	ticker := time.NewTicker(24 * time.Hour)
+	ticker := time.NewTicker(time.Duration(retentionCheckInterval.Load()))
 	defer ticker.Stop()
 
 	for {
@@ -710,15 +739,15 @@ func (a *Auditor) retentionMaintenance() {
 				cutoff := time.Now().AddDate(0, 0, -a.config.Retention.MaxAgeDays)
 				deleted, err := a.storage.DeleteOlderThan(a.ctx, cutoff)
 				if err != nil {
-					a.logger.Error("Failed to delete old audit events",
-						"error", err,
-						"cutoff", cutoff,
-					)
+					a.logger.ErrorWithFields("Failed to delete old audit events", map[string]interface{}{
+						"error":  err,
+						"cutoff": cutoff,
+					})
 				} else if deleted > 0 {
-					a.logger.Info("Deleted old audit events",
-						"count", deleted,
-						"cutoff", cutoff,
-					)
+					a.logger.InfoWithFields("Deleted old audit events", map[string]interface{}{
+						"count":  deleted,
+						"cutoff": cutoff,
+					})
 				}
 			}
 		case <-a.ctx.Done():
@@ -744,13 +773,6 @@ func ExportQuick(ctx context.Context, filter QueryFilter, format ExportFormat, w
 	return GetDefault().Export(ctx, filter, format, writer)
 }
 
-// GenerateUUID genera un UUID v4
-func generateUUID() string {
-	// Implementación simple de UUID v4
-	uuid := make([]byte, 16)
-	_, _ = io.ReadFull(strings.NewReader(fmt.Sprintf("%d", time.Now().UnixNano())), uuid)
-	uuid[6] = (uuid[6] & 0x0f) | 0x40
-	uuid[8] = (uuid[8] & 0x3f) | 0x80
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
-		uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:])
-}
+// uuidGenerator genera un UUID v4 criptográficamente seguro.
+// Es una variable para permitir su reemplazo en pruebas.
+var uuidGenerator = crypto.GenerateUUID

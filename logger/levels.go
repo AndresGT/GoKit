@@ -49,25 +49,8 @@ func (l Level) Color() string {
 	if !l.IsValid() {
 		return ""
 	}
-
-	switch l {
-	case TraceLevel:
-		return theme.Trace
-	case DebugLevel:
-		return theme.Debug
-	case InfoLevel:
-		return theme.Info
-	case SuccessLevel:
-		return theme.Success
-	case WarnLevel:
-		return theme.Warn
-	case ErrorLevel:
-		return theme.Error
-	case FatalLevel:
-		return theme.Fatal
-	case PanicLevel:
-		return theme.Panic
-	default:
-		return ""
-	}
+	return []string{
+		theme.Trace, theme.Debug, theme.Info, theme.Success,
+		theme.Warn, theme.Error, theme.Fatal, theme.Panic,
+	}[l]
 }

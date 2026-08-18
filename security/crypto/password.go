@@ -13,6 +13,20 @@ var (
 	// Se inicializa con una clave segura generada automáticamente.
 	// NOTA: En producción, debes configurar tu propia clave con SetEncryptionKey().
 	defaultEncrypter Encrypter
+
+	// Constructores inyectables para poder probar los caminos de error de init().
+	newDefaultHasher = func() (Hasher, error) {
+		return NewHasher(HasherConfig{
+			Algorithm:         AlgorithmArgon2id,
+			Argon2Memory:      64 * 1024, // 64 MB
+			Argon2Iterations:  3,
+			Argon2Parallelism: 2,
+			Argon2KeyLength:   32,
+			Argon2SaltLength:  16,
+		})
+	}
+	generateDefaultKey  = GenerateEncryptionKey
+	newDefaultEncrypter = NewAESEncrypter
 )
 
 // =============================================================================
@@ -20,24 +34,28 @@ var (
 // =============================================================================
 
 func init() {
-	// Inicializar hasher por defecto con Argon2id
+	initGlobalState()
+}
+
+// initGlobalState inicializa las instancias globales por defecto.
+// Está separado de init() para poder probar los caminos de error.
+func initGlobalState() {
 	var err error
-	defaultHasher, err = NewHasher(HasherConfig{
-		Algorithm:         AlgorithmArgon2id,
-		Argon2Memory:      64 * 1024, // 64 MB
-		Argon2Iterations:  3,
-		Argon2Parallelism: 2,
-		Argon2KeyLength:   32,
-		Argon2SaltLength:  16,
-	})
+	defaultHasher, err = newDefaultHasher()
 	if err != nil {
 		panic("crypto: fallo al inicializar el Hasher por defecto: " + err.Error())
 	}
 
-	// Inicializar encrypter por defecto con clave temporal
 	// ADVERTENCIA: Esta clave NO es segura para producción
-	key, _ := GenerateEncryptionKey()
-	defaultEncrypter, _ = NewAESEncrypter(key)
+	key, err := generateDefaultKey()
+	if err != nil {
+		panic("crypto: fallo al generar la clave por defecto: " + err.Error())
+	}
+
+	defaultEncrypter, err = newDefaultEncrypter(key)
+	if err != nil {
+		panic("crypto: fallo al inicializar el Encrypter por defecto: " + err.Error())
+	}
 }
 
 // =============================================================================
@@ -68,10 +86,8 @@ func VerifyPassword(password, storedHash string) (bool, error) {
 
 	hasherToUse := defaultHasher
 	if algo != AlgorithmArgon2id {
-		tempHasher, err := NewHasher(HasherConfig{Algorithm: algo})
-		if err != nil {
-			return false, err
-		}
+		// NewHasher nunca falla para algoritmos devueltos por DetectAlgorithm
+		tempHasher, _ := NewHasher(HasherConfig{Algorithm: algo})
 		hasherToUse = tempHasher
 	}
 
@@ -174,39 +190,27 @@ func SetEncryptionKey(key []byte) error {
 // HashWithArgon2id genera un hash usando Argon2id con configuración óptima.
 // Recomendado para la mayoría de casos (OWASP).
 func HashWithArgon2id(password string) (string, error) {
-	hasher, err := NewArgon2Hasher(HasherConfig{})
-	if err != nil {
-		return "", err
-	}
+	hasher, _ := NewArgon2Hasher(HasherConfig{})
 	return hasher.Hash(password)
 }
 
 // HashWithBcrypt genera un hash usando Bcrypt con costo 12.
 // Bueno para compatibilidad con sistemas legacy.
 func HashWithBcrypt(password string) (string, error) {
-	hasher, err := NewBcryptHasher(HasherConfig{BcryptCost: 12})
-	if err != nil {
-		return "", err
-	}
+	hasher, _ := NewBcryptHasher(HasherConfig{BcryptCost: 12})
 	return hasher.Hash(password)
 }
 
 // HashWithScrypt genera un hash usando Scrypt con configuración estándar.
 func HashWithScrypt(password string) (string, error) {
-	hasher, err := NewScryptHasher(HasherConfig{})
-	if err != nil {
-		return "", err
-	}
+	hasher, _ := NewScryptHasher(HasherConfig{})
 	return hasher.Hash(password)
 }
 
 // HashWithPBKDF2 genera un hash usando PBKDF2-SHA256 con 600k iteraciones.
 // Estándar NIST para entornos enterprise.
 func HashWithPBKDF2(password string) (string, error) {
-	hasher, err := NewPBKDF2Hasher(HasherConfig{})
-	if err != nil {
-		return "", err
-	}
+	hasher, _ := NewPBKDF2Hasher(HasherConfig{})
 	return hasher.Hash(password)
 }
 

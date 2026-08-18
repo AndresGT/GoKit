@@ -9,6 +9,9 @@ import (
 
 var defaultLogger *Logger
 
+// exitProcess permite redirigir os.Exit en pruebas
+var exitProcess = os.Exit
+
 func init() {
 	defaultLogger = New()
 }
@@ -61,10 +64,6 @@ func New(opts ...Option) *Logger {
 		opt(&cfg)
 	}
 
-	if cfg.Writer == nil {
-		cfg.Writer = os.Stdout
-	}
-
 	return &Logger{
 		config:    cfg,
 		formatter: NewFormatter(cfg),
@@ -89,7 +88,7 @@ func (l *Logger) log(level Level, message string) {
 	}()
 
 	if level == FatalLevel {
-		os.Exit(1)
+		exitProcess(1)
 	}
 
 	if level == PanicLevel {

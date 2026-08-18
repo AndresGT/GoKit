@@ -46,14 +46,10 @@ func (f *Formatter) formatTime() string {
 
 func (f *Formatter) formatLevel(level Level) string {
 	prefix := level.Prefix()
-	
+
 	if f.config.EnableColor {
 		return colorize(level.Color(), prefix)
 	}
-	
-	return prefix
-}
 
-func (f *Formatter) join(parts ...string) string {
-	return strings.Join(parts, " ")
+	return prefix
 }

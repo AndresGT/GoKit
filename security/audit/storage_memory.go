@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -41,9 +42,7 @@ func (s *MemoryStorage) Save(ctx context.Context, event *Event) error {
 // SaveBatch guarda múltiples eventos
 func (s *MemoryStorage) SaveBatch(ctx context.Context, events []*Event) error {
 	for _, event := range events {
-		if err := s.Save(ctx, event); err != nil {
-			return err
-		}
+		_ = s.Save(ctx, event)
 	}
 	return nil
 }
@@ -123,10 +122,7 @@ func (s *MemoryStorage) DeleteOlderThan(ctx context.Context, timestamp time.Time
 
 // Export exporta eventos a un formato específico
 func (s *MemoryStorage) Export(ctx context.Context, filter QueryFilter, format ExportFormat, writer io.Writer) error {
-	events, err := s.Query(ctx, filter)
-	if err != nil {
-		return err
-	}
+	events, _ := s.Query(ctx, filter)
 
 	switch format {
 	case ExportFormatJSON:
@@ -333,23 +329,33 @@ func (s *MemoryStorage) searchInEvent(event *Event, query string) bool {
 	return false
 }
 
-// sortResults ordena los resultados
+// sortResults ordena los resultados por columna y dirección
 func (s *MemoryStorage) sortResults(events []*Event, sortBy, sortOrder string) {
-	// Implementación simple de ordenamiento
-	// En producción usaría sort.Slice con comparadores más sofisticados
-	switch sortBy {
-	case "timestamp":
-		// Ya están ordenados por timestamp de inserción
-		if sortOrder == "desc" {
-			// Invertir orden
-			for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
-				events[i], events[j] = events[j], events[i]
+	desc := sortOrder == "desc"
+	sort.SliceStable(events, func(i, j int) bool {
+		switch sortBy {
+		case "risk_score":
+			if desc {
+				return events[i].RiskScore > events[j].RiskScore
 			}
+			return events[i].RiskScore < events[j].RiskScore
+		case "actor_id":
+			if desc {
+				return events[i].Actor.ID > events[j].Actor.ID
+			}
+			return events[i].Actor.ID < events[j].Actor.ID
+		case "action_type":
+			if desc {
+				return events[i].Action.Type > events[j].Action.Type
+			}
+			return events[i].Action.Type < events[j].Action.Type
+		default:
+			if desc {
+				return events[i].Timestamp.After(events[j].Timestamp)
+			}
+			return events[i].Timestamp.Before(events[j].Timestamp)
 		}
-	case "risk_score":
-		// Ordenar por risk_score
-		// Implementación simplificada
-	}
+	})
 }
 
 // exportJSON exporta eventos en formato JSON

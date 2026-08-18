@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	fmt.Println("=== GoKit Crypto Module Demo ===\n")
+	fmt.Println("=== GoKit Crypto Module Demo ===")
 
 	// =============================================================================
 	// 1. HASHING DE CONTRASEÑAS (Uso Rápido)

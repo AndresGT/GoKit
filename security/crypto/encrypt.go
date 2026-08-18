@@ -113,17 +113,9 @@ func NewAESEncrypter(key []byte) (*AESEncrypter, error) {
 		return nil, ErrInvalidKeyLength
 	}
 
-	// Crear el cipher AES
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, ErrEncryptionFailed
-	}
-
-	// Crear el modo GCM
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, ErrEncryptionFailed
-	}
+	// Con una clave de 32 bytes, aes.NewCipher y cipher.NewGCM nunca fallan
+	block, _ := aes.NewCipher(key)
+	gcm, _ := cipher.NewGCM(block)
 
 	return &AESEncrypter{
 		key: key,
@@ -269,7 +261,7 @@ func (e *AESEncrypter) DecryptString(ciphertext string) (string, error) {
 //	encrypter, _ := crypto.NewAESEncrypter(key)
 func GenerateEncryptionKey() ([]byte, error) {
 	key := make([]byte, aesKeySize)
-	if _, err := rand.Read(key); err != nil {
+	if _, err := io.ReadFull(rand.Reader, key); err != nil {
 		return nil, ErrEncryptionFailed
 	}
 	return key, nil

@@ -1,18 +1,44 @@
 package audit
 
 import (
+	"context"
+	"fmt"
 	"net"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 )
 
+// EventQuerier consulta eventos almacenados para la detección de amenazas.
+// El auditor inyecta su storage.Query para que el motor no dependa de un
+// storage concreto.
+type EventQuerier func(ctx context.Context, filter QueryFilter) ([]*Event, error)
+
+// Umbrales de detección. Son variables en lugar de constantes para permitir
+// ajustes en pruebas y configuración en runtime.
+var (
+	bruteForceThreshold   = 5
+	bruteForceWindow      = 5 * time.Minute
+	scrapingThreshold     = 30
+	scrapingWindow        = time.Minute
+	ddosThreshold         = 200
+	ddosWindow            = 10 * time.Second
+	impossibleTravelWindow = time.Hour
+	maliciousIPRiskScore  = 0.8
+)
+
+// Patrones de ataques comunes
+var (
+	sqlInjectionPattern = regexp.MustCompile(`(?i)(union\s+select|insert\s+into|delete\s+from|drop\s+table|update\s+.*\s+set|or\s+1\s*=\s*1|'\s*or\s*'|--\s*$)`)
+	xssPattern          = regexp.MustCompile(`(?i)(<script|javascript:|on\w+\s*=|<iframe|<object|<embed)`)
+)
+
 // NewIAEngine crea un nuevo motor de IA para detección de amenazas
-func NewIAEngine(minRiskThreshold float64) *IAEngine {
+func NewIAEngine(minRiskThreshold float64, history EventQuerier) *IAEngine {
 	return &IAEngine{
 		enabled:          true,
 		minRiskThreshold: minRiskThreshold,
+		history:          history,
 		rules:            make([]DetectionRule, 0),
 		behaviorProfiles: make(map[string]*BehaviorProfile),
 		ipReputation:     &IPReputationDB{cache: make(map[string]*IPReputation)},
@@ -33,78 +59,78 @@ func (e *IAEngine) LoadDefaultRules() {
 	defer e.mu.Unlock()
 
 	e.rules = []DetectionRule{
-		// Detección de Fuerza Bruta
 		{
 			ID:          "BRUTE_FORCE_001",
 			Name:        "Brute Force Login Attempt",
 			Description: "Detecta múltiples intentos fallidos de login desde la misma IP",
 			Severity:    "HIGH",
 			Condition:   e.detectBruteForce,
+			Action:      e.actionBruteForce,
 			Enabled:     true,
 		},
-		// Detección de SQL Injection
 		{
 			ID:          "SQL_INJECTION_001",
 			Name:        "SQL Injection Attempt",
 			Description: "Detecta patrones comunes de SQL injection en payloads",
 			Severity:    "CRITICAL",
-			Pattern:     regexp.MustCompile(`(?i)(union\s+select|insert\s+into|delete\s+from|drop\s+table|update\s+.*\s+set|or\s+1\s*=\s*1|'\s*or\s*'|--\s*$)`),
+			Pattern:     sqlInjectionPattern,
 			Condition:   e.detectSQLInjection,
+			Action:      e.actionSQLInjection,
 			Enabled:     true,
 		},
-		// Detección de XSS
 		{
 			ID:          "XSS_001",
 			Name:        "Cross-Site Scripting Attempt",
 			Description: "Detecta patrones de XSS en payloads",
 			Severity:    "HIGH",
-			Pattern:     regexp.MustCompile(`(?i)(<script|javascript:|on\w+\s*=|<iframe|<object|<embed)`),
+			Pattern:     xssPattern,
 			Condition:   e.detectXSS,
+			Action:      e.actionXSS,
 			Enabled:     true,
 		},
-		// Detección de Scraping
 		{
 			ID:          "SCRAPING_001",
 			Name:        "Web Scraping Detection",
 			Description: "Detecta comportamiento de scraping basado en frecuencia de peticiones",
 			Severity:    "MEDIUM",
 			Condition:   e.detectScraping,
+			Action:      e.actionScraping,
 			Enabled:     true,
 		},
-		// Detección de Viaje Imposible
 		{
 			ID:          "IMPOSSIBLE_TRAVEL_001",
 			Name:        "Impossible Travel Detection",
 			Description: "Detecta logins desde ubicaciones geográficas imposibles en poco tiempo",
 			Severity:    "CRITICAL",
 			Condition:   e.detectImpossibleTravel,
+			Action:      e.actionImpossibleTravel,
 			Enabled:     true,
 		},
-		// Detección de DDoS
 		{
 			ID:          "DDOS_001",
 			Name:        "DDoS Attack Detection",
 			Description: "Detecta patrones de ataque DDoS basados en volumen de peticiones",
 			Severity:    "CRITICAL",
 			Condition:   e.detectDDoS,
+			Action:      e.actionDDoS,
 			Enabled:     true,
 		},
-		// Detección de Anomalías
 		{
 			ID:          "ANOMALY_001",
 			Name:        "Behavioral Anomaly Detection",
 			Description: "Detecta comportamientos anómalos usando análisis estadístico",
 			Severity:    "MEDIUM",
 			Condition:   e.detectAnomaly,
+			Action:      e.actionAnomaly,
 			Enabled:     true,
 		},
-		// Detección de IPs Maliciosas
 		{
 			ID:          "MALICIOUS_IP_001",
 			Name:        "Malicious IP Detection",
 			Description: "Detecta peticiones desde IPs con mala reputación",
 			Severity:    "HIGH",
 			Condition:   e.detectMaliciousIP,
+			Action:      e.actionMaliciousIP,
 			Enabled:     true,
 		},
 	}
@@ -117,19 +143,21 @@ func (e *IAEngine) Analyze(event *Event) ([]ThreatDetection, float64) {
 	}
 
 	e.mu.RLock()
-	defer e.mu.RUnlock()
+	rules := make([]DetectionRule, len(e.rules))
+	copy(rules, e.rules)
+	e.mu.RUnlock()
 
 	var threats []ThreatDetection
 	totalRisk := 0.0
 
-	// Actualizar estadísticas
+	e.mu.Lock()
 	e.stats.TotalEvaluations++
 	e.stats.LastEvaluationTime = time.Now().UTC()
+	e.mu.Unlock()
 
-	// Ejecutar todas las reglas habilitadas
-	for i := range e.rules {
-		rule := &e.rules[i]
-		if !rule.Enabled {
+	for i := range rules {
+		rule := &rules[i]
+		if !rule.Enabled || rule.Condition == nil || rule.Action == nil {
 			continue
 		}
 
@@ -138,137 +166,120 @@ func (e *IAEngine) Analyze(event *Event) ([]ThreatDetection, float64) {
 			if threat != nil {
 				threat.RuleID = rule.ID
 				threats = append(threats, *threat)
-				
-				// Actualizar estadísticas de la regla
-				rule.Hits++
-				rule.LastHit = time.Now().UTC()
-				
-				// Actualizar estadísticas por tipo
+
+				e.mu.Lock()
+				if i < len(e.rules) {
+					e.rules[i].Hits++
+					e.rules[i].LastHit = time.Now().UTC()
+				}
 				e.stats.DetectionByType[threat.Type]++
-				
-				// Calcular riesgo basado en severidad
+				e.mu.Unlock()
+
 				riskMultiplier := getSeverityMultiplier(threat.Severity)
 				totalRisk += threat.Confidence * riskMultiplier
 			}
 		}
 	}
 
-	// Normalizar score de riesgo (0-1)
-	riskScore := totalRisk / float64(len(e.rules))
-	if riskScore > 1.0 {
-		riskScore = 1.0
+	riskScore := 0.0
+	if len(rules) > 0 {
+		riskScore = totalRisk / float64(len(rules))
+		if riskScore > 1.0 {
+			riskScore = 1.0
+		}
 	}
 
-	// Actualizar estadísticas globales
 	if len(threats) > 0 {
+		e.mu.Lock()
 		e.stats.ThreatsDetected += int64(len(threats))
+		e.mu.Unlock()
 	}
 
 	return threats, riskScore
 }
 
+// countRecentEvents cuenta eventos recientes que coinciden con el filtro,
+// incluyendo el evento actual en análisis.
+func (e *IAEngine) countRecentEvents(filter QueryFilter) int {
+	count := 1
+	if e.history == nil {
+		return count
+	}
+	// El conteo requiere todos los eventos de la ventana, no aplicar paginación
+	filter.Offset = 0
+	filter.Limit = 1000
+	events, err := e.history(context.Background(), filter)
+	if err != nil {
+		return count
+	}
+	return count + len(events)
+}
+
+// extractPayload extrae el payload a analizar desde metadata o path
+func (e *IAEngine) extractPayload(event *Event) string {
+	if p, ok := event.Metadata["payload"]; ok {
+		if s, ok := p.(string); ok && s != "" {
+			return s
+		}
+	}
+	return event.Action.Path
+}
+
+// actorID retorna el ID del actor, usando la IP como fallback
+func (e *IAEngine) actorID(event *Event) string {
+	if event.Actor.ID != "" {
+		return event.Actor.ID
+	}
+	return event.Context.IPAddress
+}
+
 // detectBruteForce detecta intentos de fuerza bruta
 func (e *IAEngine) detectBruteForce(event *Event) bool {
-	// Verificar si es un intento de login fallido
 	if event.Action.Category != "AUTH" || event.Action.Type != "LOGIN" {
 		return false
 	}
-	
 	if event.Result.Status != "FAILURE" {
 		return false
 	}
-
-	ip := event.Context.IPAddress
-	
-	// Contar intentos fallidos recientes desde la misma IP
-	failedAttempts := 0
-	cutoff := time.Now().Add(-5 * time.Minute)
-	
-	// En una implementación real, esto consultaría la base de datos
-	// Aquí simulamos con metadata
-	if attempts, ok := event.Metadata["failed_attempts"]; ok {
-		if count, ok := attempts.(int); ok {
-			failedAttempts = count
-		}
-	}
-
-	return failedAttempts >= 5
+	now := time.Now()
+	count := e.countRecentEvents(QueryFilter{
+		IPAddresses:      []string{event.Context.IPAddress},
+		Statuses:         []string{"FAILURE"},
+		ActionTypes:      []string{"LOGIN"},
+		ActionCategories: []string{"AUTH"},
+		StartTime:        now.Add(-bruteForceWindow),
+	})
+	return count >= bruteForceThreshold
 }
 
 // detectSQLInjection detecta intentos de SQL injection
 func (e *IAEngine) detectSQLInjection(event *Event) bool {
-	// Buscar patrones de SQL injection en el payload o path
-	payload := ""
-	if p, ok := event.Metadata["payload"]; ok {
-		if str, ok := p.(string); ok {
-			payload = str
-		}
-	}
-
-	if payload == "" {
-		payload = event.Action.Path
-	}
-
-	for _, rule := range e.rules {
-		if rule.ID == "SQL_INJECTION_001" && rule.Pattern != nil {
-			return rule.Pattern.MatchString(payload)
-		}
-	}
-	return false
+	return sqlInjectionPattern.MatchString(e.extractPayload(event))
 }
 
 // detectXSS detecta intentos de XSS
 func (e *IAEngine) detectXSS(event *Event) bool {
-	payload := ""
-	if p, ok := event.Metadata["payload"]; ok {
-		if str, ok := p.(string); ok {
-			payload = str
-		}
-	}
-
-	if payload == "" {
-		payload = event.Action.Path
-	}
-
-	for _, rule := range e.rules {
-		if rule.ID == "XSS_001" && rule.Pattern != nil {
-			return rule.Pattern.MatchString(payload)
-		}
-	}
-	return false
+	return xssPattern.MatchString(e.extractPayload(event))
 }
 
 // detectScraping detecta comportamiento de scraping
 func (e *IAEngine) detectScraping(event *Event) bool {
-	actorID := event.Actor.ID
-	if actorID == "" {
-		actorID = event.Context.IPAddress
-	}
-
-	// Obtener o crear perfil de comportamiento
-	profile := e.getOrCreateProfile(actorID)
-	
-	// Calcular requests por minuto actuales
-	now := time.Now()
-	timeWindow := 1 * time.Minute
-	
-	// En una implementación real, usaríamos una ventana deslizante
-	// Aquí simplificamos contando eventos recientes
-	requestCount := 1 // El evento actual
-	
-	// Si hay más de 100 requests por minuto, es sospechoso
-	requestsPerMinute := float64(requestCount)
-	
-	// Actualizar perfil
-	profile.AverageRequestsPerMinute = (profile.AverageRequestsPerMinute + requestsPerMinute) / 2
-	profile.LastUpdated = now
-
-	return requestsPerMinute > 100
+	profile := e.getOrCreateProfile(e.actorID(event))
+	count := e.countRecentEvents(QueryFilter{
+		IPAddresses: []string{event.Context.IPAddress},
+		StartTime:   time.Now().Add(-scrapingWindow),
+	})
+	profile.AverageRequestsPerMinute = (profile.AverageRequestsPerMinute + float64(count)) / 2
+	profile.LastUpdated = time.Now().UTC()
+	return count >= scrapingThreshold
 }
 
 // detectImpossibleTravel detecta viajes imposibles
 func (e *IAEngine) detectImpossibleTravel(event *Event) bool {
 	if event.Action.Category != "AUTH" || event.Action.Type != "LOGIN" {
+		return false
+	}
+	if event.Result.Status != "SUCCESS" {
 		return false
 	}
 
@@ -279,21 +290,22 @@ func (e *IAEngine) detectImpossibleTravel(event *Event) bool {
 
 	profile := e.getOrCreateProfile(actorID)
 	currentLocation := event.Context.IPGeoLocation.CountryCode
-	
-	// Si hay ubicaciones previas, verificar distancia y tiempo
+	if currentLocation == "" {
+		return false
+	}
+
+	now := time.Now()
+	suspicious := false
 	if len(profile.CommonLocations) > 0 {
 		lastLocation := profile.CommonLocations[len(profile.CommonLocations)-1]
-		
-		// Si las ubicaciones son diferentes países y el último login fue hace menos de 1 hora
-		if lastLocation != currentLocation && lastLocation != "" {
-			// En una implementación real, calcularíamos la distancia geográfica
-			// y verificaríamos si es posible viajar en el tiempo transcurrido
-			// Aquí simplificamos: diferentes países en menos de 1 hora = imposible
-			return true
+		if lastLocation != currentLocation && lastLocation != "" &&
+			!profile.LastUpdated.IsZero() &&
+			now.Sub(profile.LastUpdated) <= impossibleTravelWindow {
+			suspicious = true
 		}
 	}
 
-	// Actualizar perfil
+	profile.LastUpdated = now
 	found := false
 	for _, loc := range profile.CommonLocations {
 		if loc == currentLocation {
@@ -301,37 +313,32 @@ func (e *IAEngine) detectImpossibleTravel(event *Event) bool {
 			break
 		}
 	}
-	if !found && currentLocation != "" {
+	if !found {
 		profile.CommonLocations = append(profile.CommonLocations, currentLocation)
 		if len(profile.CommonLocations) > 10 {
 			profile.CommonLocations = profile.CommonLocations[1:]
 		}
 	}
 
-	return false
+	return suspicious
 }
 
 // detectDDoS detecta patrones de ataque DDoS
 func (e *IAEngine) detectDDoS(event *Event) bool {
-	ip := event.Context.IPAddress
-	
-	// Contar peticiones recientes desde la misma IP
-	requestCount := 1
-	
-	// Si hay más de 1000 requests por segundo desde la misma IP, es DDoS
-	return requestCount > 1000
+	if event.Context.IPAddress == "" {
+		return false
+	}
+	count := e.countRecentEvents(QueryFilter{
+		IPAddresses: []string{event.Context.IPAddress},
+		StartTime:   time.Now().Add(-ddosWindow),
+	})
+	return count >= ddosThreshold
 }
 
 // detectAnomaly detecta anomalías de comportamiento
 func (e *IAEngine) detectAnomaly(event *Event) bool {
-	actorID := event.Actor.ID
-	if actorID == "" {
-		actorID = event.Context.IPAddress
-	}
+	profile := e.getOrCreateProfile(e.actorID(event))
 
-	profile := e.getOrCreateProfile(actorID)
-	
-	// Verificar si la acción es típica para este actor
 	isTypical := false
 	for _, action := range profile.TypicalActions {
 		if action == event.Action.Type {
@@ -340,44 +347,137 @@ func (e *IAEngine) detectAnomaly(event *Event) bool {
 		}
 	}
 
-	// Si no es típica y el actor tiene historial, marcar como anomalía
-	if !isTypical && len(profile.TypicalActions) > 0 {
-		return true
-	}
-
-	// Actualizar perfil con acción típica
+	anomalous := !isTypical && len(profile.TypicalActions) > 0
 	if !isTypical {
 		profile.TypicalActions = append(profile.TypicalActions, event.Action.Type)
 		if len(profile.TypicalActions) > 20 {
 			profile.TypicalActions = profile.TypicalActions[1:]
 		}
 	}
-
-	return false
+	return anomalous
 }
 
 // detectMaliciousIP detecta IPs maliciosas
 func (e *IAEngine) detectMaliciousIP(event *Event) bool {
 	ip := event.Context.IPAddress
-	
-	// Obtener reputación de la IP
+	if ip == "" {
+		return false
+	}
 	reputation := e.ipReputation.Get(ip)
-	
-	return reputation.IsMalicious || reputation.Blacklisted || reputation.RiskScore > 0.8
+	return reputation.IsMalicious || reputation.Blacklisted || reputation.RiskScore > maliciousIPRiskScore
+}
+
+// Acciones de las reglas
+
+func (e *IAEngine) actionBruteForce(event *Event) *ThreatDetection {
+	return &ThreatDetection{
+		Type:           "BRUTE_FORCE",
+		Severity:       "HIGH",
+		Confidence:     0.9,
+		Description:    "Múltiples intentos fallidos de login desde la misma IP",
+		Evidence:       []string{fmt.Sprintf("IP %s", event.Context.IPAddress)},
+		Recommendation: "Bloquear temporalmente la IP y activar autenticación multifactor",
+	}
+}
+
+func (e *IAEngine) actionSQLInjection(event *Event) *ThreatDetection {
+	payload := e.extractPayload(event)
+	return &ThreatDetection{
+		Type:           "SQL_INJECTION",
+		Severity:       "CRITICAL",
+		Confidence:     0.85,
+		Description:    "Intento de inyección SQL detectado",
+		Evidence:       []string{payload},
+		Pattern:        sqlInjectionPattern.FindString(payload),
+		Recommendation: "Validar y escapar toda entrada del usuario; usar consultas parametrizadas",
+	}
+}
+
+func (e *IAEngine) actionXSS(event *Event) *ThreatDetection {
+	payload := e.extractPayload(event)
+	return &ThreatDetection{
+		Type:           "XSS",
+		Severity:       "HIGH",
+		Confidence:     0.85,
+		Description:    "Intento de Cross-Site Scripting detectado",
+		Evidence:       []string{payload},
+		Pattern:        xssPattern.FindString(payload),
+		Recommendation: "Escapar la salida y sanitizar toda entrada del usuario",
+	}
+}
+
+func (e *IAEngine) actionScraping(event *Event) *ThreatDetection {
+	return &ThreatDetection{
+		Type:           "SCRAPING",
+		Severity:       "MEDIUM",
+		Confidence:     0.7,
+		Description:    "Frecuencia de peticiones anormalmente alta desde la misma IP",
+		Evidence:       []string{fmt.Sprintf("IP %s", event.Context.IPAddress)},
+		Recommendation: "Aplicar rate limiting y validar el User-Agent del cliente",
+	}
+}
+
+func (e *IAEngine) actionImpossibleTravel(event *Event) *ThreatDetection {
+	return &ThreatDetection{
+		Type:           "IMPOSSIBLE_TRAVEL",
+		Severity:       "CRITICAL",
+		Confidence:     0.95,
+		Description:    "Login exitoso desde una ubicación imposible de alcanzar en el tiempo transcurrido",
+		Evidence:       []string{fmt.Sprintf("País %s", event.Context.IPGeoLocation.CountryCode)},
+		Recommendation: "Verificar la identidad del usuario y revisar la sesión",
+	}
+}
+
+func (e *IAEngine) actionDDoS(event *Event) *ThreatDetection {
+	return &ThreatDetection{
+		Type:           "DDOS",
+		Severity:       "CRITICAL",
+		Confidence:     0.9,
+		Description:    "Volumen anormalmente alto de peticiones desde la misma IP",
+		Evidence:       []string{fmt.Sprintf("IP %s", event.Context.IPAddress)},
+		Recommendation: "Bloquear la IP y activar mitigación de DDoS",
+	}
+}
+
+func (e *IAEngine) actionAnomaly(event *Event) *ThreatDetection {
+	return &ThreatDetection{
+		Type:           "ANOMALY",
+		Severity:       "MEDIUM",
+		Confidence:     0.6,
+		Description:    "Acción poco habitual para el actor identificado",
+		Evidence:       []string{fmt.Sprintf("Acción %s", event.Action.Type)},
+		Recommendation: "Revisar si la acción fue realizada por el usuario legítimo",
+	}
+}
+
+func (e *IAEngine) actionMaliciousIP(event *Event) *ThreatDetection {
+	return &ThreatDetection{
+		Type:           "MALICIOUS_IP",
+		Severity:       "HIGH",
+		Confidence:     0.8,
+		Description:    "Petición desde una IP con mala reputación",
+		Evidence:       []string{fmt.Sprintf("IP %s", event.Context.IPAddress)},
+		Recommendation: "Bloquear la IP y monitorear actividad futura",
+	}
 }
 
 // getOrCreateProfile obtiene o crea un perfil de comportamiento
 func (e *IAEngine) getOrCreateProfile(actorID string) *BehaviorProfile {
+	if actorID == "" {
+		actorID = "unknown"
+	}
+	e.profileMu.Lock()
+	defer e.profileMu.Unlock()
 	profile, exists := e.behaviorProfiles[actorID]
 	if !exists {
 		profile = &BehaviorProfile{
-			ActorID:      actorID,
-			CommonIPs:    make([]string, 0),
-			CommonLocations: make([]string, 0),
-			TypicalActions: make([]string, 0),
-			ActiveHours:  make([]int, 0),
-			Devices:      make([]string, 0),
-			LastUpdated:  time.Now().UTC(),
+			ActorID:           actorID,
+			CommonIPs:         make([]string, 0),
+			CommonLocations:   make([]string, 0),
+			TypicalActions:    make([]string, 0),
+			ActiveHours:       make([]int, 0),
+			Devices:           make([]string, 0),
+			LastUpdated:       time.Now().UTC(),
 		}
 		e.behaviorProfiles[actorID] = profile
 	}
@@ -400,7 +500,7 @@ func getSeverityMultiplier(severity string) float64 {
 	}
 }
 
-// Get stats del motor de IA
+// GetStats retorna las estadísticas del motor de IA
 func (e *IAEngine) GetStats() IAStats {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -432,7 +532,7 @@ func (e *IAEngine) AddRule(rule DetectionRule) {
 func (e *IAEngine) RemoveRule(ruleID string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	
+
 	for i, rule := range e.rules {
 		if rule.ID == ruleID {
 			e.rules = append(e.rules[:i], e.rules[i+1:]...)
@@ -441,16 +541,15 @@ func (e *IAEngine) RemoveRule(ruleID string) {
 	}
 }
 
-// Get Reputation de una IP
+// Get retorna la reputación de una IP
 func (db *IPReputationDB) Get(ip string) *IPReputation {
 	db.cacheMu.RLock()
 	defer db.cacheMu.RUnlock()
-	
+
 	if rep, exists := db.cache[ip]; exists {
 		return rep
 	}
-	
-	// Retornar reputación por defecto si no existe
+
 	return &IPReputation{
 		IPAddress: ip,
 		RiskScore: 0.0,
@@ -474,7 +573,7 @@ func (db *IPReputationDB) MarkAsMalicious(ip string, reason string) {
 	db.Update(rep)
 }
 
-// IsTor checks if IP is a known Tor exit node
+// IsTorExitNode verifica si la IP es un exit node conocido de Tor
 func IsTorExitNode(ip string) bool {
 	// Lista simplificada de exit nodes de Tor
 	// En producción, usaría una lista actualizada de https://check.torproject.org/
@@ -482,28 +581,23 @@ func IsTorExitNode(ip string) bool {
 		"185.220.101.0": true,
 		"185.220.102.0": true,
 	}
-	
-	// Verificar prefijo de IP
+
 	parts := strings.Split(ip, ".")
 	if len(parts) >= 3 {
 		prefix := strings.Join(parts[:3], ".") + ".0"
 		return torExits[prefix]
 	}
-	
+
 	return false
 }
 
-// GeoIP lookup simplificado
+// LookupGeoIP realiza una búsqueda GeoIP simplificada
 func LookupGeoIP(ip string) GeoLocation {
-	// En producción, usaría una base de datos GeoIP real como MaxMind
-	// Aquí retornamos datos dummy basados en rangos de IP
-	
 	netIP := net.ParseIP(ip)
 	if netIP == nil {
 		return GeoLocation{}
 	}
 
-	// Simplificación extrema para demo
 	if netIP.IsLoopback() {
 		return GeoLocation{
 			Country:     "Localhost",
@@ -512,7 +606,6 @@ func LookupGeoIP(ip string) GeoLocation {
 		}
 	}
 
-	// Detectar IP privada
 	if netIP.IsPrivate() {
 		return GeoLocation{
 			Country:     "Private Network",
@@ -520,7 +613,6 @@ func LookupGeoIP(ip string) GeoLocation {
 		}
 	}
 
-	// Default
 	return GeoLocation{
 		Country:     "Unknown",
 		CountryCode: "XX",

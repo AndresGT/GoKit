@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"strings"
 
 	"golang.org/x/crypto/scrypt"
@@ -82,7 +83,7 @@ func NewScryptHasher(cfg HasherConfig) (*ScryptHasher, error) {
 func (h *ScryptHasher) Hash(password string) (string, error) {
 	// Generar salt criptográficamente seguro
 	salt := make([]byte, h.saltLen)
-	if _, err := rand.Read(salt); err != nil {
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
 		return "", err
 	}
 

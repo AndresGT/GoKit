@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"strings"
 )
@@ -68,7 +69,7 @@ func RandomBytes(n int) ([]byte, error) {
 	}
 
 	bytes := make([]byte, n)
-	if _, err := rand.Read(bytes); err != nil {
+	if _, err := io.ReadFull(rand.Reader, bytes); err != nil {
 		return nil, ErrRandomGenerationFailed
 	}
 
@@ -152,7 +153,7 @@ func RandomHex(n int) (string, error) {
 //	// Resultado: "550e8400-e29b-41d4-a716-446655440000"
 func GenerateUUID() (string, error) {
 	uuid := make([]byte, 16)
-	if _, err := rand.Read(uuid); err != nil {
+	if _, err := io.ReadFull(rand.Reader, uuid); err != nil {
 		return "", ErrRandomGenerationFailed
 	}
 
