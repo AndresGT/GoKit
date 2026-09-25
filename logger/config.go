@@ -11,6 +11,7 @@ type Config struct {
 	EnableColor bool
 	ShowDate    bool
 	ShowTime    bool
+	ShowLevel   bool
 }
 
 var defaultConfig = Config{
@@ -19,6 +20,7 @@ var defaultConfig = Config{
 	EnableColor: true,
 	ShowDate:    true,
 	ShowTime:    true,
+	ShowLevel:   true,
 }
 
 func NewConfig() Config {

@@ -1,5 +1,7 @@
 package logger
 
+import "sync"
+
 const (
 	colorReset = "\033[0m"
 
@@ -16,15 +18,15 @@ const (
 )
 
 type Theme struct {
-	Trace   string // Color para el nivel TRACE
-	Debug   string // Color para el nivel DEBUG
-	Info    string // Color para el nivel INFO
-	Success string // Color para el nivel SUCCESS
-	Warn    string // Color para el nivel WARN
-	Error   string // Color para el nivel ERROR
-	Fatal   string // Color para el nivel FATAL
-	Panic   string // Color para el nivel PANIC
-	Reset   string // Código para restablecer el color al final de cada mensaje
+	Trace   string
+	Debug   string
+	Info    string
+	Success string
+	Warn    string
+	Error   string
+	Fatal   string
+	Panic   string
+	Reset   string
 }
 
 var defaultTheme = Theme{
@@ -39,18 +41,32 @@ var defaultTheme = Theme{
 	Reset:   colorReset,
 }
 
-var theme = defaultTheme
+var (
+	themeMu sync.RWMutex
+	theme   = defaultTheme
+)
 
 func SetTheme(t Theme) {
+	themeMu.Lock()
+	defer themeMu.Unlock()
 	theme = t
 }
 
 func ResetTheme() {
+	themeMu.Lock()
+	defer themeMu.Unlock()
 	theme = defaultTheme
 }
+
+func GetTheme() Theme {
+	themeMu.RLock()
+	defer themeMu.RUnlock()
+	return theme
+}
+
 func colorize(color, text string) string {
 	if color == "" {
 		return text
 	}
-	return color + text + theme.Reset
+	return color + text + colorReset
 }

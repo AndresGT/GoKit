@@ -10,10 +10,9 @@ func main() {
 	)
 	logger.SetDefault(log)
 
-	log.Debug("hola")
+	log.Fatal("hola")
 	log.Info("info")
 	log.Error("error")
-
 
 	logger.Debug("hola que tal como estas")
 

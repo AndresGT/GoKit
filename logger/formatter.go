@@ -17,31 +17,29 @@ func NewFormatter(cfg Config) *Formatter {
 
 func (f *Formatter) Format(level Level, message string) string {
 	var sb strings.Builder
+	now := time.Now()
 
-	if f.config.ShowDate {
-		sb.WriteString(f.formatDate())
+	if f.config.ShowDate && f.config.ShowTime {
+		sb.WriteString(now.Format("2006-01-02 15:04:05"))
+		sb.WriteString(" ")
+	} else if f.config.ShowDate {
+		sb.WriteString(now.Format("2006-01-02"))
+		sb.WriteString(" ")
+	} else if f.config.ShowTime {
+		sb.WriteString(now.Format("15:04:05"))
 		sb.WriteString(" ")
 	}
 
-	if f.config.ShowTime {
-		sb.WriteString(f.formatTime())
+	if f.config.ShowLevel {
+		sb.WriteString(f.formatLevel(level))
 		sb.WriteString(" ")
 	}
-
-	sb.WriteString(f.formatLevel(level))
-	sb.WriteString(" ")
 
 	sb.WriteString(message)
 
+	sb.WriteString("\n")
+
 	return sb.String()
-}
-
-func (f *Formatter) formatDate() string {
-	return time.Now().Format("2006-01-02")
-}
-
-func (f *Formatter) formatTime() string {
-	return time.Now().Format("15:04:05")
 }
 
 func (f *Formatter) formatLevel(level Level) string {

@@ -1,7 +1,9 @@
 package logger
 
 import (
+	"fmt"
 	"io"
+	"os"
 )
 
 type Option func(*Config)
@@ -35,14 +37,29 @@ func WithDateTime(showDate, showTime bool) Option {
 	}
 }
 
+func WithShowDate(showDate bool) Option {
+	return func(c *Config) {
+		c.ShowDate = showDate
+	}
+}
+
+func WithShowTime(showTime bool) Option {
+	return func(c *Config) {
+		c.ShowTime = showTime
+	}
+}
+
 func WithFileOutput(filePath string) Option {
 	return func(c *Config) {
 		if filePath == "" {
 			return
 		}
-		if w, err := NewFileWriter(filePath); err == nil {
-			c.Writer = w
-			c.EnableColor = false 
+		w, err := NewFileWriter(filePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "logger: failed to open %s: %v\n", filePath, err)
+			return
 		}
+		c.Writer = w
+		c.EnableColor = false
 	}
 }

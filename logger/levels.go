@@ -12,7 +12,6 @@ const (
 	FatalLevel
 	PanicLevel
 )
-	
 
 var levelNames = [...]string{
 	"TRACE",
@@ -32,7 +31,6 @@ func (l Level) String() string {
 	return levelNames[l]
 }
 
-
 func (l Level) Enabled(min Level) bool {
 	return l >= min
 }
@@ -49,8 +47,25 @@ func (l Level) Color() string {
 	if !l.IsValid() {
 		return ""
 	}
-	return []string{
-		theme.Trace, theme.Debug, theme.Info, theme.Success,
-		theme.Warn, theme.Error, theme.Fatal, theme.Panic,
-	}[l]
+	t := GetTheme()
+	switch l {
+	case TraceLevel:
+		return t.Trace
+	case DebugLevel:
+		return t.Debug
+	case InfoLevel:
+		return t.Info
+	case SuccessLevel:
+		return t.Success
+	case WarnLevel:
+		return t.Warn
+	case ErrorLevel:
+		return t.Error
+	case FatalLevel:
+		return t.Fatal
+	case PanicLevel:
+		return t.Panic
+	default:
+		return ""
+	}
 }
