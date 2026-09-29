@@ -102,7 +102,7 @@ func logRouteRegistered(method, path string, protected, authApplied bool, groupN
 	}
 
 	// Construcción estructurada y ordenada
-	msg := fmt.Sprintf("%s [%] %-20s | grupo: %-5s | estado: %s",
+	msg := fmt.Sprintf("%s [%s] %s | grupo: %s | estado: %s",
 		icon,
 		method,
 		path,
