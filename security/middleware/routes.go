@@ -17,7 +17,7 @@ import (
 // =============================================================================
 
 // Route describe un endpoint a registrar en un router concreto. H es el tipo
-// de handler nativo del framework (gin.HandlerFunc o fiber.Handler), lo que
+// de handler nativo del framework (gin.HandlerF,unc o fiber.Handler), lo que
 // permite reutilizar la misma estructura tanto para Gin como para Fiber sin
 // duplicar la definición de rutas.
 //
@@ -102,7 +102,7 @@ func logRouteRegistered(method, path string, protected, authApplied bool, groupN
 	}
 
 	// Construcción estructurada y ordenada
-	msg := fmt.Sprintf("%s [%-6s] %-35s | grupo: %-12s | estado: %s",
+	msg := fmt.Sprintf("%s [%] %-20s | grupo: %-5s | estado: %s",
 		icon,
 		method,
 		path,
