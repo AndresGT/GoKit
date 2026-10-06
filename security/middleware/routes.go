@@ -163,24 +163,44 @@ func ginAuthWithManager(manager *token.JWTManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": security.ErrTokenInvalid.Error()})
+			c.AbortWithStatusJSON(
+				http.StatusUnauthorized, 
+				gin.H{"error": security.ErrTokenInvalid.Error()},
+			) 
 			return
 		}
 
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": security.ErrTokenInvalid.Error()})
+			c.AbortWithStatusJSON(
+				http.StatusUnauthorized, 
+				gin.H{"error": security.ErrTokenInvalid.Error()},
+			)
 			return
 		}
 
 		claims, err := manager.ValidateToken(parts[1])
 		if err != nil {
-			logger.WarnWithFields("Intento de acceso token inválido (Gin/RegisterRoutes)", map[string]interface{}{
-				"ip":    c.ClientIP(),
-				"path":  c.Request.URL.Path,
-				"error": err.Error(),
-			})
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": security.ErrTokenInvalid.Error()})
+			logger.WarnWithFields(
+				"Intento de acceso token inválido (Gin/RegisterRoutes)",
+				map[string]interface{}{
+					"ip":    c.ClientIP(),
+					"path":  c.Request.URL.Path,
+					"error": err.Error(),
+				},
+			)
+			c.AbortWithStatusJSON(
+				http.StatusUnauthorized,
+				gin.H{"error": security.ErrTokenInvalid.Error()},
+			)
+			return
+		}
+
+		if claims.TokenType != token.TokenTypeAccess {
+			c.AbortWithStatusJSON(
+				http.StatusUnauthorized,
+				gin.H{"error": "token type is not authorized"},
+			)
 			return
 		}
 
