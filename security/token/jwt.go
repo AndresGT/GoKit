@@ -32,6 +32,7 @@ type Claims struct {
 const (
 	TokenTypeAccess  = "access"
 	TokenTypeRefresh = "refresh"
+	TokenTypeTemporary = "temporary"
 )
 
 type JWTConfig struct {
@@ -222,4 +223,23 @@ func ExtractClaims(tokenString string) *Claims {
 		return nil
 	}
 	return claims
+}
+
+func (m *JWTManager) GenerateTemporaryToken(claims Claims, duration time.Duration) (string, error) {
+	if duration <= 0 {
+		duration = 15 * time.Minute
+	}
+	claims.TokenType = TokenTypeTemporary
+	return m.generateToken(claims, duration)
+}
+
+func (m *JWTManager) ValidateTemporaryToken(tokenString string) (*Claims, error) {
+	claims, err := m.ValidateToken(tokenString)
+	if err != nil {
+		return nil, err
+	}
+	if claims.TokenType != TokenTypeTemporary {
+		return nil, ErrJWTInvalid
+	}
+	return claims, nil
 }
