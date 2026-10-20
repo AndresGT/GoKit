@@ -1,6 +1,6 @@
 module github.com/AndresGT/GoKit
 
-go 1.25.0
+go 1.23.0
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
